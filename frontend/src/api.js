@@ -145,9 +145,13 @@ export const queryStream = async (
       buffer = lines.pop(); // save trailing partial line in buffer
       
       for (const line of lines) {
-        if (!line.trim()) continue;
+        let trimmed = line.trim();
+        if (!trimmed) continue;
+        if (trimmed.startsWith("data: ")) {
+          trimmed = trimmed.substring(6).trim();
+        }
         try {
-          const parsed = JSON.parse(line);
+          const parsed = JSON.parse(trimmed);
           if (parsed.type === "sources") {
             if (onSources) onSources(parsed.data);
           } else if (parsed.type === "content") {

@@ -41,32 +41,32 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#212121] flex flex-col justify-center items-center px-4 font-sans selection:bg-emerald-800">
-      <div className="w-full max-w-md bg-[#171717] border border-[#2f2f2f] rounded-2xl p-8 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+    <div className="min-h-screen bg-gradient-to-br from-[#0a0b0f] via-[#12131a] to-[#181922] flex flex-col justify-center items-center px-4 font-sans selection:bg-emerald-800 select-none">
+      <div className="w-full max-w-md bg-[#13141c]/95 border border-white/5 rounded-3xl p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-md animate-fade-in">
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-emerald-950/40 border border-emerald-800/30 rounded-full flex items-center justify-center mb-3">
-            <Database className="w-6 h-6 text-emerald-400" />
+          <div className="w-14 h-14 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+            <Database className="w-7 h-7 text-emerald-400" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-100">Create Account</h1>
-          <p className="text-xs text-gray-500 mt-1">Register for AI Document Search</p>
+          <h1 className="text-2xl font-extrabold text-white tracking-tight">Create Account</h1>
+          <p className="text-xs text-gray-500 mt-1 font-mono uppercase tracking-widest">Register for AI Document Search</p>
         </div>
 
         {error && (
-          <div className="mb-4 bg-rose-950/20 border border-rose-900/50 p-3 rounded-lg text-xs text-rose-400 font-medium text-center">
-            {error}
+          <div className="mb-5 bg-rose-950/20 border border-rose-800/30 p-3 rounded-xl text-xs text-rose-400 font-bold text-center animate-fade-in">
+            ⚠️ {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-4 bg-emerald-950/20 border border-emerald-900/50 p-3 rounded-lg text-xs text-emerald-400 font-medium text-center">
-            Registration successful! Redirecting to login...
+          <div className="mb-5 bg-emerald-950/20 border border-emerald-800/30 p-3 rounded-xl text-xs text-emerald-400 font-bold text-center animate-fade-in">
+            ✅ Registration successful! Redirecting...
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
               Username
             </label>
             <input
@@ -74,13 +74,13 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Min 3 characters"
-              className="w-full py-2.5 px-4 rounded-lg bg-[#212121] border border-[#3c3c3c] text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-600 transition-colors"
+              className="w-full py-3 px-4 rounded-xl bg-[#181922] border border-white/5 text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300 shadow-inner"
               disabled={loading || success}
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5">
+            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
               Password
             </label>
             <input
@@ -88,7 +88,7 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Min 6 characters"
-              className="w-full py-2.5 px-4 rounded-lg bg-[#212121] border border-[#3c3c3c] text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-600 transition-colors"
+              className="w-full py-3 px-4 rounded-xl bg-[#181922] border border-white/5 text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300 shadow-inner"
               disabled={loading || success}
             />
           </div>
@@ -96,16 +96,16 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
           <button
             type="submit"
             disabled={loading || success}
-            className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-semibold flex items-center justify-center space-x-2 transition-colors focus:outline-none shadow-md mt-6"
+            className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:bg-gray-800 disabled:from-gray-800 disabled:to-gray-800 text-white rounded-xl text-sm font-bold flex items-center justify-center space-x-2 transition-all duration-300 shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] focus:outline-none mt-8"
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
                 <span>Creating Account...</span>
               </>
             ) : (
               <>
-                <UserPlus className="w-4 h-4" />
+                <UserPlus className="w-4 h-4 text-white" />
                 <span>Sign Up</span>
               </>
             )}
@@ -116,7 +116,7 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
           Already have an account?{' '}
           <button 
             onClick={onNavigateToLogin}
-            className="text-emerald-400 hover:underline font-medium focus:outline-none"
+            className="text-emerald-400 hover:underline font-bold focus:outline-none transition-colors"
             disabled={loading || success}
           >
             Log in here

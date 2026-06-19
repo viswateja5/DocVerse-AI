@@ -458,7 +458,7 @@ export default function App() {
   const currentMessages = allMessages[sessionId] || [];
 
   return (
-    <div className="flex h-screen bg-[#212121] text-gray-200 overflow-hidden font-sans select-none">
+    <div className="flex h-screen bg-[#0d0e12] text-gray-200 overflow-hidden font-sans select-none">
       
       {/* Desktop Sidebar Panel */}
       <div className="hidden md:flex h-full shrink-0">
@@ -514,23 +514,24 @@ export default function App() {
 
         {/* Study Center Workspace */}
         {activeTab === 'study' && (
-          <div className="flex-1 flex flex-col bg-[#212121] overflow-y-auto p-6 md:p-10">
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="mb-6 flex items-center space-x-3 text-emerald-400">
-                <GraduationCap className="w-8 h-8" />
-                <h1 className="text-2xl font-extrabold text-white">Interactive Study Workspace</h1>
+          <div className="flex-1 flex flex-col bg-[#0e0f13] overflow-y-auto p-6 md:p-10 select-none">
+            <div className="max-w-4xl mx-auto w-full animate-fade-in">
+              <div className="mb-6 flex items-center space-x-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">
+                <GraduationCap className="w-8 h-8 text-emerald-400 shrink-0" />
+                <h1 className="text-3xl font-extrabold tracking-tight text-white">Interactive Study Workspace</h1>
               </div>
-              <p className="text-sm text-gray-400 mb-8">
-                Compile quiz worksheets, review cards, and interview cheat sheets instantly based on your parsed documents.
+              <p className="text-sm text-gray-400 mb-8 max-w-2xl">
+                Compile interactive quiz worksheets, review card recall tools, and interview prep guides instantly compiled by scanning your ingested document context.
               </p>
+              
               {/* Configurations Header */}
-              <div className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-6 mb-8 grid grid-cols-1 sm:grid-cols-4 gap-6">
+              <div className="bg-[#13141c]/80 border border-white/5 rounded-2xl p-6 mb-8 grid grid-cols-1 sm:grid-cols-4 gap-5 backdrop-blur-md shadow-xl select-none">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Resource Format</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Resource Format</label>
                   <select 
                     value={studyType} 
                     onChange={e => setStudyType(e.target.value)}
-                    className="w-full py-2 px-3 bg-[#212121] border border-[#3d3d3d] rounded-lg text-sm text-gray-200 outline-none focus:border-emerald-600 transition-colors"
+                    className="w-full py-2.5 px-3 bg-[#181922] border border-white/5 rounded-xl text-xs text-gray-200 outline-none focus:border-emerald-500 transition-all duration-300 font-bold"
                   >
                     <option value="mcqs">Multiple Choice (MCQ)</option>
                     <option value="flashcards">Flashcards Match</option>
@@ -539,11 +540,11 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Difficulty Tier</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Difficulty Tier</label>
                   <select 
                     value={studyDiff} 
                     onChange={e => setStudyDiff(e.target.value)}
-                    className="w-full py-2 px-3 bg-[#212121] border border-[#3d3d3d] rounded-lg text-sm text-gray-200 outline-none focus:border-emerald-600 transition-colors"
+                    className="w-full py-2.5 px-3 bg-[#181922] border border-white/5 rounded-xl text-xs text-gray-200 outline-none focus:border-emerald-500 transition-all duration-300 font-bold"
                   >
                     <option value="easy">Easy Level</option>
                     <option value="medium">Medium Level</option>
@@ -551,12 +552,12 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Number of Questions</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Number of Questions</label>
                   <select 
                     value={studyCount} 
                     onChange={e => setStudyCount(Number(e.target.value))}
                     disabled={studyType === 'notes'}
-                    className="w-full py-2 px-3 bg-[#212121] border border-[#3d3d3d] rounded-lg text-sm text-gray-200 outline-none focus:border-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="w-full py-2.5 px-3 bg-[#181922] border border-white/5 rounded-xl text-xs text-gray-200 outline-none focus:border-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 font-bold"
                   >
                     <option value={3}>3 Items</option>
                     <option value={5}>5 Items</option>
@@ -569,16 +570,16 @@ export default function App() {
                   <button
                     onClick={handleGenerateStudy}
                     disabled={studyLoading}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition-colors focus:outline-none shadow-md"
+                    className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:bg-gray-800 disabled:from-gray-800 disabled:to-gray-800 disabled:scale-100 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all duration-300 shadow-[0_4px_12px_rgba(16,185,129,0.15)] focus:outline-none"
                   >
                     {studyLoading ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
                         <span>Compiling...</span>
                       </>
                     ) : (
                       <>
-                        <BookOpen className="w-4 h-4" />
+                        <BookOpen className="w-4 h-4 text-white" />
                         <span>Generate Materials</span>
                       </>
                     )}
@@ -588,14 +589,26 @@ export default function App() {
 
               {/* Generation outputs display panels */}
               {studyData && (
-                <div className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-6 animate-fade-in select-text">
+                <div className="bg-[#13141c]/60 border border-white/5 rounded-2xl p-6 shadow-2xl animate-fade-in select-text">
+                  
+                  {/* MCQ quiz template format */}
                   {studyType === 'mcqs' && studyData.questions && (
                     <div className="space-y-6">
-                      <h2 className="text-lg font-bold text-white mb-4">Worksheet: Multiple Choice Quiz</h2>
+                      <div className="border-b border-white/5 pb-4 mb-4">
+                        <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                          <span className="text-emerald-400">📝</span>
+                          <span>Worksheet: Multiple Choice Quiz</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">Select your answers below. Explanations will reveal automatically.</p>
+                      </div>
+                      
                       {studyData.questions.map((q, qIdx) => (
-                        <div key={qIdx} className="bg-[#212121] p-4 rounded-xl border border-[#2f2f2f]">
-                          <p className="font-semibold text-sm mb-3">{qIdx + 1}. {q.question}</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                        <div key={qIdx} className="bg-[#16171f]/80 p-5 rounded-xl border border-white/5 hover:border-white/10 transition-all duration-300 shadow-sm animate-fade-in">
+                          <p className="font-semibold text-sm text-gray-100 mb-4 flex items-start">
+                            <span className="text-emerald-400 font-mono font-bold mr-2">{qIdx + 1}.</span>
+                            <span>{q.question}</span>
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                             {q.options.map((opt, oIdx) => {
                               const isSelected = selectedAnswers[qIdx] === opt;
                               const isCorrect = opt === q.correct_answer;
@@ -605,27 +618,35 @@ export default function App() {
                                 <button
                                   key={oIdx}
                                   onClick={() => !answered && setSelectedAnswers(prev => ({...prev, [qIdx]: opt}))}
-                                  className={`py-2 px-3 rounded-lg text-xs text-left transition-all ${
+                                  className={`py-3 px-4 rounded-xl text-xs text-left transition-all duration-300 font-medium border ${
                                     isSelected 
-                                      ? (isCorrect ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400' : 'bg-rose-950/40 border-rose-500 text-rose-400')
-                                      : (answered && isCorrect ? 'bg-emerald-950/20 border-emerald-800 text-emerald-500' : 'bg-[#171717] border-[#2f2f2f] hover:border-gray-500')
-                                  } border`}
+                                      ? (isCorrect 
+                                          ? 'bg-emerald-950/40 border-emerald-500 text-emerald-400 font-bold scale-[1.02] shadow-[0_0_12px_rgba(16,185,129,0.15)]' 
+                                          : 'bg-rose-950/40 border-rose-500 text-rose-400 font-bold scale-[1.02] shadow-[0_0_12px_rgba(244,63,94,0.15)]')
+                                      : (answered && isCorrect 
+                                          ? 'bg-emerald-950/20 border-emerald-800 text-emerald-400' 
+                                          : 'bg-[#121319] border-white/5 hover:border-white/20 text-gray-400 hover:text-gray-200 hover:scale-[1.01]')
+                                  }`}
                                 >
-                                  {opt}
+                                  <span className="inline-block w-5 h-5 rounded-full bg-black/35 text-center leading-5 text-[10px] mr-2 font-mono text-gray-500 uppercase">
+                                    {String.fromCharCode(65 + oIdx)}
+                                  </span>
+                                  <span>{opt}</span>
                                 </button>
                               );
                             })}
                           </div>
                           {selectedAnswers[qIdx] !== undefined && (
-                            <div className="text-xs text-gray-400 pt-2 border-t border-[#3c3c3c] flex items-start space-x-2">
+                            <div className="text-xs text-gray-300 pt-3.5 border-t border-white/5 flex items-start space-x-2.5 bg-black/20 p-3 rounded-lg animate-fade-in">
                               {selectedAnswers[qIdx] === q.correct_answer ? (
                                 <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                               ) : (
                                 <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
                               )}
-                              <p>
-                                <span className="font-bold text-emerald-400">Correct: {q.correct_answer}.</span> {q.explanation}
-                              </p>
+                              <div>
+                                <p className="font-bold text-emerald-400">Correct Answer: {q.correct_answer}.</p>
+                                <p className="text-gray-400 mt-1 leading-relaxed">{q.explanation}</p>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -633,24 +654,54 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Interactive 3D Flashcards template format */}
                   {studyType === 'flashcards' && studyData.flashcards && (
                     <div>
-                      <h2 className="text-lg font-bold text-white mb-6">Worksheet: Flashcard Recalls</h2>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="border-b border-white/5 pb-4 mb-6">
+                        <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                          <span className="text-emerald-400">🎴</span>
+                          <span>Worksheet: Flashcard Recalls</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">Click cards to spin them in 3D and reveal the concept definition.</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                         {studyData.flashcards.map((fc, idx) => {
                           const isFlipped = flippedCards[idx];
                           return (
-                            <div 
-                              key={idx}
-                              onClick={() => setFlippedCards(prev => ({...prev, [idx]: !isFlipped}))}
-                              className="h-40 bg-[#212121] hover:bg-[#282828] border border-[#2f2f2f] rounded-xl p-6 flex flex-col justify-center items-center text-center cursor-pointer select-none transition-all relative"
-                            >
-                              <span className="absolute top-2 right-2 text-[9px] uppercase font-mono text-gray-500">
-                                {isFlipped ? "Answer" : "Question"}
-                              </span>
-                              <p className={`text-sm ${isFlipped ? 'text-emerald-400 font-bold' : 'text-gray-200'}`}>
-                                {isFlipped ? fc.back : fc.front}
-                              </p>
+                            <div key={idx} className="card-container h-44 cursor-pointer select-none">
+                              <div 
+                                className={`card-inner ${isFlipped ? 'flipped' : ''}`}
+                                onClick={() => setFlippedCards(prev => ({...prev, [idx]: !isFlipped}))}
+                              >
+                                {/* Front Face */}
+                                <div className="card-front bg-gradient-to-br from-[#161720] to-[#121319] border border-white/5 hover:border-emerald-500/20 p-6 shadow-xl flex flex-col justify-between">
+                                  <div className="w-full flex justify-between items-center text-[9px] uppercase tracking-wider font-mono font-bold text-gray-500">
+                                    <span>Card {idx + 1}</span>
+                                    <span>Click to reveal</span>
+                                  </div>
+                                  <p className="text-sm font-bold text-gray-200 text-center flex-1 flex items-center justify-center max-w-[240px]">
+                                    {fc.front}
+                                  </p>
+                                  <div className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest border border-emerald-500/20 px-2 py-0.5 rounded bg-emerald-950/20">
+                                    QUESTION
+                                  </div>
+                                </div>
+                                
+                                {/* Back Face */}
+                                <div className="card-back bg-gradient-to-br from-[#0a0b0e] to-[#0e1017] border border-emerald-500/20 p-6 shadow-2xl flex flex-col justify-between">
+                                  <div className="w-full flex justify-between items-center text-[9px] uppercase tracking-wider font-mono font-bold text-emerald-500/40">
+                                    <span>Answer Side</span>
+                                    <span>Click to flip back</span>
+                                  </div>
+                                  <p className="text-sm font-bold text-emerald-400 text-center flex-1 flex items-center justify-center leading-relaxed">
+                                    {fc.back}
+                                  </p>
+                                  <div className="text-[9px] text-teal-400 font-bold uppercase tracking-widest border border-teal-500/20 px-2 py-0.5 rounded bg-teal-950/20">
+                                    DEFINITION
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           );
                         })}
@@ -658,22 +709,44 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* Interview prep template format */}
                   {studyType === 'interview' && studyData.qa && (
                     <div className="space-y-4">
-                      <h2 className="text-lg font-bold text-white mb-4">Worksheet: Interview Q&A</h2>
+                      <div className="border-b border-white/5 pb-4 mb-4">
+                        <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                          <span className="text-emerald-400">🎤</span>
+                          <span>Worksheet: Interview Q&A Guide</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">Review standard interview answers generated dynamically for your ingestion context.</p>
+                      </div>
+                      
                       {studyData.qa.map((qa, idx) => (
-                        <div key={idx} className="bg-[#212121] p-4 rounded-xl border border-[#2f2f2f]">
-                          <p className="font-bold text-sm text-emerald-400 mb-2">Q: {qa.question}</p>
-                          <p className="text-xs text-gray-300">A: {qa.answer}</p>
+                        <div key={idx} className="bg-[#16171f]/80 p-5 rounded-xl border border-white/5 hover:border-white/10 hover:scale-[1.01] transition-all duration-300 shadow-sm animate-fade-in">
+                          <p className="font-bold text-sm text-emerald-400 mb-2.5 flex items-start">
+                            <span className="mr-2 font-mono">Q:</span>
+                            <span>{qa.question}</span>
+                          </p>
+                          <p className="text-xs text-gray-300 leading-relaxed pl-5 border-l border-emerald-500/30">
+                            <span className="font-bold text-gray-400 block mb-1 uppercase text-[9px] tracking-wider">Suggested Answer:</span>
+                            {qa.answer}
+                          </p>
                         </div>
                       ))}
                     </div>
                   )}
 
+                  {/* Notes template format */}
                   {studyType === 'notes' && studyData.text && (
                     <div>
-                      <h2 className="text-lg font-bold text-white mb-4">Worksheet: Markdown Revision Guide</h2>
-                      <div className="bg-[#212121] p-6 rounded-xl border border-[#2f2f2f] prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap">
+                      <div className="border-b border-white/5 pb-4 mb-4">
+                        <h2 className="text-xl font-bold text-white flex items-center space-x-2">
+                          <span className="text-emerald-400">📚</span>
+                          <span>Worksheet: Revision Study Sheets</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 mt-1">Comprehensive structured breakdown of core document information.</p>
+                      </div>
+                      
+                      <div className="bg-[#16171f]/60 p-6 rounded-xl border border-white/5 prose prose-invert max-w-none text-xs md:text-sm text-gray-300 leading-relaxed whitespace-pre-wrap select-text font-sans">
                         {studyData.text}
                       </div>
                     </div>
@@ -686,47 +759,47 @@ export default function App() {
 
         {/* GraphRAG Explorer Workspace */}
         {activeTab === 'graph' && (
-          <div className="flex-1 flex flex-col bg-[#212121] overflow-y-auto p-6 md:p-10">
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="mb-6 flex items-center space-x-3 text-emerald-400">
-                <Network className="w-8 h-8" />
-                <h1 className="text-2xl font-extrabold text-white">GraphRAG Relationship Explorer</h1>
+          <div className="flex-1 flex flex-col bg-[#0e0f13] overflow-y-auto p-6 md:p-10 select-none">
+            <div className="max-w-4xl mx-auto w-full animate-fade-in">
+              <div className="mb-6 flex items-center space-x-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400">
+                <Network className="w-8 h-8 text-emerald-400 shrink-0" />
+                <h1 className="text-3xl font-extrabold tracking-tight text-white">GraphRAG Relationship Explorer</h1>
               </div>
-              <p className="text-sm text-gray-400 mb-8">
-                Examine connections and shortest relationship paths between entities extracted automatically during file ingestions.
+              <p className="text-sm text-gray-400 mb-8 max-w-2xl">
+                Examine connections and shortest relationship paths between entities extracted automatically during document parsing.
               </p>
 
-              <form onSubmit={handleFindGraphPath} className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-6 mb-8 grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <form onSubmit={handleFindGraphPath} className="bg-[#13141c]/80 border border-white/5 rounded-2xl p-6 mb-8 grid grid-cols-1 sm:grid-cols-3 gap-5 backdrop-blur-md shadow-xl select-none">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Source Entity</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Source Entity</label>
                   <input
                     type="text"
                     value={graphSource}
                     onChange={e => setGraphSource(e.target.value)}
                     placeholder="e.g. Elon Musk"
-                    className="w-full py-2 px-3 bg-[#212121] border border-[#3d3d3d] rounded-lg text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-600 transition-colors"
+                    className="w-full py-2.5 px-3 bg-[#181922] border border-white/5 rounded-xl text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Target Entity</label>
+                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Target Entity</label>
                   <input
                     type="text"
                     value={graphTarget}
                     onChange={e => setGraphTarget(e.target.value)}
                     placeholder="e.g. Tesla"
-                    className="w-full py-2 px-3 bg-[#212121] border border-[#3d3d3d] rounded-lg text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-600 transition-colors"
+                    className="w-full py-2.5 px-3 bg-[#181922] border border-white/5 rounded-xl text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300"
                   />
                 </div>
                 <div className="flex items-end">
                   <button
                     type="submit"
                     disabled={graphLoading}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 text-white rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 transition-colors focus:outline-none shadow-md"
+                    className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 active:scale-[0.98] disabled:scale-100 disabled:bg-gray-800 disabled:from-gray-800 disabled:to-gray-800 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all duration-300 shadow-[0_4px_12px_rgba(99,102,241,0.15)] focus:outline-none"
                   >
                     {graphLoading ? (
-                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
                     ) : (
-                      <Search className="w-4 h-4" />
+                      <Search className="w-4 h-4 text-white" />
                     )}
                     <span>Search Connections</span>
                   </button>
@@ -734,25 +807,31 @@ export default function App() {
               </form>
 
               {graphError && (
-                <div className="bg-rose-950/20 border border-rose-900/50 p-4 rounded-xl text-xs text-rose-400 font-medium">
-                  {graphError}
+                <div className="bg-rose-950/20 border border-rose-800/30 p-4 rounded-xl text-xs text-rose-400 font-bold text-center animate-fade-in shadow-sm">
+                  ⚠️ {graphError}
                 </div>
               )}
 
               {graphPathData && (
-                <div className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-6 animate-fade-in select-text">
-                  <h2 className="text-lg font-bold text-white mb-4">Connection Path Results</h2>
+                <div className="bg-[#13141c]/60 border border-white/5 rounded-2xl p-6 shadow-2xl animate-fade-in select-text">
+                  <h2 className="text-xl font-bold text-white mb-4 flex items-center space-x-2 border-b border-white/5 pb-3">
+                    <span className="text-indigo-400">🔗</span>
+                    <span>Shortest Relationship Path Results</span>
+                  </h2>
                   <div className="flex flex-col space-y-4">
                     {graphPathData.details.map((link, idx) => (
-                      <div key={idx} className="flex items-center space-x-3 bg-[#212121] p-3 rounded-lg border border-[#2f2f2f] text-xs">
-                        <div className="px-2.5 py-1 bg-emerald-950 border border-emerald-800 text-emerald-400 rounded">
-                          <strong>{link.source}</strong> ({link.source_type})
+                      <div key={idx} className="flex flex-col sm:flex-row items-center justify-between bg-[#16171f]/80 p-4 rounded-xl border border-white/5 text-xs shadow-sm hover:scale-[1.01] hover:border-emerald-500/20 transition-all duration-300">
+                        <div className="px-3.5 py-2 bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 rounded-xl flex flex-col items-center sm:items-start max-w-[200px] truncate shadow-inner">
+                          <strong className="text-white truncate max-w-xs">{link.source}</strong>
+                          <span className="text-[9px] uppercase font-mono tracking-widest text-emerald-500/60 mt-0.5">{link.source_type}</span>
                         </div>
-                        <div className="text-gray-400 font-mono italic">
-                          ─── [ {link.relationship} ] ───▶
+                        <div className="my-2 sm:my-0 text-indigo-400 font-bold font-mono text-[10px] uppercase tracking-widest flex flex-col items-center shrink-0">
+                          <span className="px-3 py-1 bg-indigo-950/20 border border-indigo-500/20 rounded-full">{link.relationship}</span>
+                          <span className="text-[14px] mt-1 tracking-widest leading-none">───▶</span>
                         </div>
-                        <div className="px-2.5 py-1 bg-[#171717] border border-[#2f2f2f] text-gray-300 rounded">
-                          <strong>{link.target}</strong> ({link.target_type})
+                        <div className="px-3.5 py-2 bg-indigo-950/20 border border-white/5 text-gray-200 rounded-xl flex flex-col items-center sm:items-start max-w-[200px] truncate">
+                          <strong className="text-white truncate max-w-xs">{link.target}</strong>
+                          <span className="text-[9px] uppercase font-mono tracking-widest text-gray-500 mt-0.5">{link.target_type}</span>
                         </div>
                       </div>
                     ))}
@@ -765,30 +844,39 @@ export default function App() {
 
         {/* Document Preview Workspace */}
         {activeTab === 'preview' && (
-          <div className="flex-1 flex flex-col bg-[#212121] overflow-y-auto p-6 md:p-10">
-            <div className="max-w-4xl mx-auto w-full">
-              <div className="mb-6 flex items-center space-x-3 text-emerald-400">
-                <Eye className="w-8 h-8" />
-                <h1 className="text-2xl font-extrabold text-white">Visual Context Document Preview</h1>
+          <div className="flex-1 flex flex-col bg-[#0e0f13] overflow-y-auto p-6 md:p-10 select-none">
+            <div className="max-w-4xl mx-auto w-full animate-fade-in">
+              <div className="mb-6 flex items-center space-x-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-indigo-400">
+                <Eye className="w-8 h-8 text-emerald-400 shrink-0" />
+                <h1 className="text-3xl font-extrabold tracking-tight text-white">Visual Context Document Preview</h1>
               </div>
-              <p className="text-sm text-gray-400 mb-8">
-                Examine context document structure and view active index chunks metadata directly.
+              <p className="text-sm text-gray-400 mb-8 max-w-2xl">
+                Examine structured indexing metadata and view loaded chunk structures directly in vector DB layout space.
               </p>
               
               {activeDocument ? (
-                <div className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-6 select-text">
-                  <h2 className="text-lg font-bold text-white mb-4">Document Details</h2>
-                  <div className="bg-[#212121] p-4 rounded-xl border border-[#2f2f2f] space-y-3 text-sm">
-                    <p className="text-gray-300"><span className="font-bold text-gray-400">File:</span> {activeDocument.name}</p>
-                    <p className="text-gray-300"><span className="font-bold text-gray-400">Active blocks:</span> {activeDocument.chunks} chunks loaded in FAISS</p>
-                    <div className="h-64 bg-[#171717] rounded-lg border border-[#2f2f2f] flex items-center justify-center text-gray-500 italic">
-                      Thumbnail previews served natively via browser parser.
+                <div className="bg-[#13141c]/60 border border-white/5 rounded-2xl p-6 shadow-2xl animate-fade-in select-text">
+                  <h2 className="text-lg font-bold text-white mb-4 border-b border-white/5 pb-3">Document Details</h2>
+                  <div className="bg-[#16171f]/80 p-5 rounded-xl border border-white/5 space-y-4 text-xs md:text-sm">
+                    <p className="text-gray-300 flex items-center justify-between">
+                      <span className="font-bold text-gray-500 uppercase tracking-widest text-[10px]">File Context:</span> 
+                      <span className="font-bold text-white bg-emerald-950/40 border border-emerald-500/20 px-3 py-1 rounded-xl shadow-inner">{activeDocument.name}</span>
+                    </p>
+                    <p className="text-gray-300 flex items-center justify-between">
+                      <span className="font-bold text-gray-500 uppercase tracking-widest text-[10px]">Indexed blocks:</span> 
+                      <span className="font-bold text-emerald-400">{activeDocument.chunks} chunks loaded in FAISS</span>
+                    </p>
+                    <div className="h-64 bg-black/40 rounded-xl border border-white/5 flex flex-col items-center justify-center text-gray-500 italic text-center p-6 shadow-inner select-none">
+                      <Database className="w-10 h-10 text-emerald-500/20 mb-3" />
+                      <span className="font-semibold text-xs text-gray-400">Thumbnail view active</span>
+                      <p className="text-[10px] text-gray-600 mt-1.5 max-w-xs">Document chunks are parsed and loaded dynamically. Interactive canvas layers will load once context-focused queries are fired.</p>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="bg-[#171717] border border-[#2f2f2f] rounded-2xl p-10 text-center text-gray-500 italic text-sm">
-                  Please select or ingest a file context block to preview chunks visually.
+                <div className="bg-[#13141c]/40 border border-white/5 rounded-2xl p-12 text-center text-gray-500 italic text-xs md:text-sm select-none shadow-md">
+                  <Database className="w-8 h-8 text-gray-700 mx-auto mb-3" />
+                  <span>Please select or ingest a file context block to preview chunks visually.</span>
                 </div>
               )}
             </div>
