@@ -30,7 +30,7 @@ logger = logging.getLogger("rag-backend")
 # In-memory query counter for admin stats
 _query_count = 0
 
-async def ingest_document(file: UploadFile, user_id: int, db: AsyncSession) -> int:
+async def ingest_document(file: UploadFile, user_id: int, db: AsyncSession, session_id: Optional[str] = None) -> int:
     """
     Saves and processes an uploaded document (PDF, DOCX, or TXT).
     Saves metadata to database and updates local FAISS vector store.
@@ -59,21 +59,42 @@ async def ingest_document(file: UploadFile, user_id: int, db: AsyncSession) -> i
         if not chunks:
             raise ValueError("No text chunks could be extracted from the document.")
             
+        # Add metadata tagging for session isolation
+        import uuid
+        from datetime import datetime, timezone
+        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        for chunk in chunks:
+            chunk.metadata["session_id"] = session_id or "default"
+            chunk.metadata["document_id"] = doc_id
+            chunk.metadata["document_name"] = file.filename
+            chunk.metadata["upload_timestamp"] = timestamp
+            
         # 3. Generate embeddings and save to local FAISS store
         embeddings = get_embeddings_model()
         save_or_update_vector_store(chunks, embeddings, "vector_store")
         
+        # 3.5 Build GraphRAG entities (session-specific)
+        try:
+            from graph_rag.graph_manager import build_entity_graph
+            await build_entity_graph(documents, session_id or "default")
+        except Exception as ge:
+            logger.warning(f"GraphRAG entity extraction failed: {ge}")
+            
         # 4. Save metadata record to database
         db_file = UploadFileModel(
             filename=file.filename,
             user_id=user_id,
-            chunk_count=len(chunks)
+            chunk_count=len(chunks),
+            session_id=session_id,
+            document_id=doc_id
         )
         db.add(db_file)
         await db.commit()
         await db.refresh(db_file)
         
-        logger.info(f"Ingested {file.filename}. Chunks generated: {len(chunks)}")
+        logger.info(f"Ingested {file.filename} for session {session_id}. Chunks generated: {len(chunks)}")
         return len(chunks)
         
     except Exception as e:
@@ -108,6 +129,7 @@ async def query_rag_stream(
     session_id: str,
     user_id: int,
     session_maker: async_sessionmaker[AsyncSession],
+    global_search: bool = False,
 ) -> AsyncGenerator[str, None]:
     """
     Main conversational RAG stream generator.
@@ -119,7 +141,7 @@ async def query_rag_stream(
     _query_count += 1
     
     # 1. Evaluate cache
-    cache_key = f"enterprise_cache:{user_id}:{session_id}:{query.strip().lower()}"
+    cache_key = f"enterprise_cache:{user_id}:{session_id}:{global_search}:{query.strip().lower()}"
     cached = await get_cached(cache_key)
     
     if cached:
@@ -154,7 +176,12 @@ async def query_rag_stream(
         if faiss_active and vector_db:
             try:
                 # Retrieve top 10 candidate document chunks via hybrid (BM25 + FAISS)
-                retriever = create_hybrid_retriever(vector_db, top_k=10)
+                retriever = create_hybrid_retriever(
+                    vector_db, 
+                    top_k=10, 
+                    session_id=session_id, 
+                    global_search=global_search
+                )
                 retrieved_docs = await retriever.ainvoke(query)
                 
                 # 3. Cross-Encoder Reranking
@@ -194,6 +221,7 @@ async def query_rag_stream(
                 sources_list.append({
                     "file": filename,
                     "page": str(page) if page > 0 else "Web",
+                    "session_id": doc.metadata.get("session_id") if not doc.metadata.get("is_web") else "global_web",
                     "chunk_id": chunk_id
                 })
                 

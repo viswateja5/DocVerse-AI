@@ -60,3 +60,41 @@ def load_vector_store(
         index_name=index_name,
         allow_dangerous_deserialization=True
     )
+
+def delete_document_from_vector_store(
+    document_id: str,
+    embeddings,
+    store_path: str,
+    index_name: str = "index"
+) -> None:
+    """
+    Deletes all vectors and document chunks associated with a specific document_id
+    from the local FAISS index.
+    """
+    faiss_file = os.path.join(store_path, f"{index_name}.faiss")
+    pkl_file = os.path.join(store_path, f"{index_name}.pkl")
+    
+    if not (os.path.exists(faiss_file) and os.path.exists(pkl_file)):
+        return
+        
+    try:
+        db = FAISS.load_local(
+            store_path, 
+            embeddings, 
+            index_name=index_name,
+            allow_dangerous_deserialization=True
+        )
+        
+        # Find all docstore IDs matching the document_id
+        keys_to_delete = []
+        for key, doc in db.docstore._dict.items():
+            if doc.metadata.get("document_id") == document_id:
+                keys_to_delete.append(key)
+                
+        if keys_to_delete:
+            db.delete(keys_to_delete)
+            db.save_local(store_path, index_name=index_name)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("rag-backend")
+        logger.error(f"Failed to delete document {document_id} from FAISS: {e}")

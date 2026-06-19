@@ -37,6 +37,7 @@ class ChatSession(Base):
     id: Mapped[str] = mapped_column(String(50), primary_key=True)
     name: Mapped[str] = mapped_column(String(100), default="New Conversation", nullable=False)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=lambda: datetime.now(timezone.utc), 
@@ -101,6 +102,9 @@ class UploadFileModel(Base):
         default=lambda: datetime.now(timezone.utc), 
         nullable=False
     )
+    
+    session_id: Mapped[Optional[str]] = mapped_column(ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+    document_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="uploads")

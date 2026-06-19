@@ -27,10 +27,12 @@ class TokenData(BaseModel):
 class QueryRequest(BaseModel):
     question: str = Field(..., description="User query text context")
     session_id: str = Field(..., description="Unique conversation session ID")
+    global_search: Optional[bool] = Field(default=False, description="Whether to search globally across all sessions")
 
 class SourceMetadata(BaseModel):
     file: str = Field(..., description="Name of the source document file")
     page: int = Field(..., description="1-indexed page index location")
+    session_id: Optional[str] = Field(default=None, description="Session ID associated with the chunk")
     chunk_id: str = Field(..., description="Internal hash metadata for the retrieved document chunk")
 
 class ChatMessageResponse(BaseModel):
@@ -53,6 +55,12 @@ class UploadResponse(BaseModel):
     filename: str
     message: str
     total_chunks: int
+
+class DocumentResponse(BaseModel):
+    document_id: str
+    document_name: str
+    chunk_count: int
+    created_at: datetime
 
 # --- Admin Analytics Schemas ---
 

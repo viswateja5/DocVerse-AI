@@ -1,3 +1,9 @@
+import bcrypt
+if not hasattr(bcrypt, "__about__"):
+    class DummyAbout:
+        __version__ = getattr(bcrypt, "__version__", "4.0.1")
+    bcrypt.__about__ = DummyAbout()
+
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -18,6 +24,10 @@ from cache.redis_cache import init_redis, redis_client
 from routers.auth import auth_router
 from routers.rag_router import rag_router
 from routers.admin_router import admin_router
+from routers.agent_router import agent_router
+from routers.voice_router import voice_router
+from routers.edu_router import edu_router
+from routers.export_router import export_router
 from schemas.api_schemas import HealthResponse
 
 # Configure logging
@@ -40,6 +50,19 @@ async def lifespan(app: FastAPI):
     # 2. Connect to Cache
     await init_redis()
     
+    # 3. Eagerly load ML models to cache them in memory and eliminate first-query latency
+    try:
+        logger.info("Eagerly loading Embeddings and CrossEncoder reranker models...")
+        from utils.embeddings import get_embeddings_model
+        from utils.rerank import get_cross_encoder
+        
+        # Call functions to trigger lazy loaders and cache via lru_cache
+        get_embeddings_model()
+        get_cross_encoder()
+        logger.info("ML Models successfully preloaded and cached in memory.")
+    except Exception as e:
+        logger.warning(f"ML Model eager loading failed (will load lazily on query): {e}")
+        
     yield
     logger.info("Shutting down Enterprise AI Document Assistant backend...")
 
@@ -117,3 +140,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
 app.include_router(auth_router)
 app.include_router(rag_router)
 app.include_router(admin_router)
+app.include_router(agent_router)
+app.include_router(voice_router)
+app.include_router(edu_router)
+app.include_router(export_router)

@@ -2,6 +2,7 @@ import os
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import text, String, ForeignKey, DateTime, Text, Integer
 from dotenv import load_dotenv
 
 # Load env configurations
@@ -57,3 +58,17 @@ async def init_db() -> None:
             
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if is_sqlite:
+            # Check and alter table to add columns for backward compatibility
+            try:
+                await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN session_id VARCHAR(50) REFERENCES chat_sessions(id) ON DELETE CASCADE"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN document_id VARCHAR(100)"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(text("ALTER TABLE chat_sessions ADD COLUMN summary TEXT"))
+            except Exception:
+                pass

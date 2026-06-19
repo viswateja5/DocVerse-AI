@@ -1,5 +1,5 @@
-from typing import List
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,8 +8,8 @@ from slowapi import Limiter
 # Local imports
 from database.connection import get_db, async_session_maker
 from core.rate_limit import limiter
-from models.db_models import User, ChatSession
-from schemas.api_schemas import UploadResponse, QueryRequest, ChatSessionResponse
+from models.db_models import User, ChatSession, UploadFileModel
+from schemas.api_schemas import UploadResponse, QueryRequest, ChatSessionResponse, DocumentResponse
 from services import rag_engine
 from routers.auth import get_current_user
 
@@ -20,6 +20,7 @@ rag_router = APIRouter(tags=["Document Search & Chat"])
 async def upload_document(
     request: Request,  # Required by slowapi
     file: UploadFile = File(...),
+    session_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -37,7 +38,7 @@ async def upload_document(
         )
         
     try:
-        total_chunks = await rag_engine.ingest_document(file, current_user.id, db)
+        total_chunks = await rag_engine.ingest_document(file, current_user.id, db, session_id)
         return UploadResponse(
             filename=file.filename,
             message="Document uploaded and processed successfully.",
@@ -177,3 +178,65 @@ async def delete_chat_session(
     await db.commit()
     
     return {"message": f"Chat session '{id}' successfully deleted."}
+
+@rag_router.get("/session/{session_id}/documents", response_model=List[DocumentResponse])
+async def get_session_documents(
+    session_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Fetches all active documents uploaded in the specified chat session.
+    """
+    result = await db.execute(
+        select(UploadFileModel)
+        .where(UploadFileModel.session_id == session_id, UploadFileModel.user_id == current_user.id)
+        .order_by(UploadFileModel.created_at.desc())
+    )
+    docs = result.scalars().all()
+    return [
+        DocumentResponse(
+            document_id=doc.document_id or "",
+            document_name=doc.filename,
+            chunk_count=doc.chunk_count,
+            created_at=doc.created_at
+        )
+        for doc in docs
+    ]
+
+@rag_router.delete("/document/{document_id}", status_code=status.HTTP_200_OK)
+async def remove_document(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Removes a document from SQLite metadata and purges its vectors from the FAISS database.
+    """
+    result = await db.execute(
+        select(UploadFileModel)
+        .where(UploadFileModel.document_id == document_id, UploadFileModel.user_id == current_user.id)
+    )
+    doc = result.scalars().first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID '{document_id}' not found."
+        )
+        
+    # Delete vectors from FAISS Vector Store
+    from utils.embeddings import get_embeddings_model
+    from utils.faiss_store import delete_document_from_vector_store
+    try:
+        embeddings = get_embeddings_model()
+        delete_document_from_vector_store(document_id, embeddings, "vector_store")
+    except Exception as e:
+        import logging
+        logger = logging.getLogger("rag-backend")
+        logger.error(f"Failed to delete FAISS vectors for document {document_id}: {e}")
+        
+    # Delete database metadata record
+    await db.delete(doc)
+    await db.commit()
+    
+    return {"message": "Document successfully deleted."}

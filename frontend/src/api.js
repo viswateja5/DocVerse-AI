@@ -44,15 +44,28 @@ export const checkHealth = async () => {
   return response.data;
 };
 
-export const uploadDocument = async (file) => {
+export const uploadDocument = async (file, sessionId = null) => {
   const formData = new FormData();
   formData.append('file', file);
+  if (sessionId) {
+    formData.append('session_id', sessionId);
+  }
   
   const response = await apiClient.post('/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   });
+  return response.data;
+};
+
+export const fetchSessionDocuments = async (sessionId) => {
+  const response = await apiClient.get(`/session/${sessionId}/documents`);
+  return response.data;
+};
+
+export const deleteDocument = async (documentId) => {
+  const response = await apiClient.delete(`/document/${documentId}`);
   return response.data;
 };
 
@@ -83,15 +96,19 @@ export const fetchAdminStats = async () => {
 export const queryStream = async (
   question, 
   sessionId, 
+  globalSearch,
   onToken, 
   onSources, 
   onError, 
-  onDone
+  onDone,
+  onTrace,
+  onDecision,
+  onConfidence
 ) => {
   const token = localStorage.getItem('rag_token');
   
   try {
-    const response = await fetch(`${API_BASE_URL}/query`, {
+    const response = await fetch(`${API_BASE_URL}/agent/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -99,7 +116,8 @@ export const queryStream = async (
       },
       body: JSON.stringify({
         question,
-        session_id: sessionId
+        session_id: sessionId,
+        global_search: globalSearch
       })
     });
     
@@ -131,11 +149,17 @@ export const queryStream = async (
         try {
           const parsed = JSON.parse(line);
           if (parsed.type === "sources") {
-            onSources(parsed.data);
+            if (onSources) onSources(parsed.data);
           } else if (parsed.type === "content") {
-            onToken(parsed.data);
+            if (onToken) onToken(parsed.data);
+          } else if (parsed.type === "decision") {
+            if (onDecision) onDecision(parsed.data);
+          } else if (parsed.type === "trace") {
+            if (onTrace) onTrace(parsed.data);
+          } else if (parsed.type === "confidence") {
+            if (onConfidence) onConfidence(parsed.data);
           } else if (parsed.type === "done") {
-            onDone();
+            if (onDone) onDone();
           }
         } catch (e) {
           console.error("Failed to parse stream line:", line, e);
@@ -145,4 +169,44 @@ export const queryStream = async (
   } catch (err) {
     onError(err);
   }
+};
+
+export const exportSession = async (sessionId, format) => {
+  const response = await apiClient.get(`/export/session/${sessionId}?format=${format}`, {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export const speakText = async (text) => {
+  const response = await apiClient.post('/voice/speak', { text }, {
+    responseType: 'blob'
+  });
+  return response.data;
+};
+
+export const transcribeSpeech = async (audioBlob) => {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'recording.wav');
+  const response = await apiClient.post('/voice/transcribe', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+  return response.data;
+};
+
+export const fetchEduContent = async (sessionId, contentType, difficulty, count = 5) => {
+  const response = await apiClient.get(`/edu/generate?session_id=${sessionId}&content_type=${contentType}&difficulty=${difficulty}&count=${count}`);
+  return response.data;
+};
+
+export const fetchGraphPath = async (sessionId, source, target) => {
+  const response = await apiClient.get(`/agent/graph/path?session_id=${sessionId}&source=${source}&target=${target}`);
+  return response.data;
+};
+
+export const fetchGraphData = async (sessionId) => {
+  const response = await apiClient.get(`/agent/graph/data?session_id=${sessionId}`);
+  return response.data;
 };

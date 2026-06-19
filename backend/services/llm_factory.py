@@ -2,7 +2,7 @@ import os
 from typing import Any
 from langchain_openai import ChatOpenAI
 
-def get_llm(streaming: bool = True) -> Any:
+def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
     """
     Dynamically instantiates and returns the configured LLM provider client
     based on the MODEL_PROVIDER environment variable.
@@ -17,7 +17,7 @@ def get_llm(streaming: bool = True) -> Any:
             raise ValueError("OPENAI_API_KEY environment variable is missing.")
         return ChatOpenAI(
             model="gpt-4o-mini", 
-            temperature=0.0, 
+            temperature=temperature, 
             streaming=streaming,
             openai_api_key=api_key
         )
@@ -31,7 +31,7 @@ def get_llm(streaming: bool = True) -> Any:
         return ChatGoogleGenerativeAI(
             model="gemini-1.5-flash", 
             google_api_key=api_key, 
-            temperature=0.0, 
+            temperature=temperature, 
             streaming=streaming
         )
         
@@ -43,7 +43,7 @@ def get_llm(streaming: bool = True) -> Any:
         return ChatGroq(
            model="llama-3.3-70b-versatile", 
             groq_api_key=api_key, 
-            temperature=0.0, 
+            temperature=temperature, 
             streaming=streaming
         )
         
@@ -53,7 +53,7 @@ def get_llm(streaming: bool = True) -> Any:
         return ChatOllama(
             model="llama3", 
             base_url=ollama_host, 
-            temperature=0.0
+            temperature=temperature
         )
         
     else:

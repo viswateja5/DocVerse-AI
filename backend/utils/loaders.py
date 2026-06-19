@@ -29,9 +29,29 @@ def load_document(file_path: str) -> List[Document]:
         loader = Docx2txtLoader(file_path)
     elif ext == ".txt":
         loader = TextLoader(file_path, encoding="utf-8")
+    elif ext == ".csv":
+        import pandas as pd
+        try:
+            df = pd.read_csv(file_path)
+            content = df.to_csv(index=False)
+            return [Document(page_content=content, metadata={"source": file_path, "page": 0})]
+        except Exception as e:
+            raise ValueError(f"Failed to parse CSV file: {str(e)}")
+    elif ext in [".xlsx", ".xls"]:
+        import pandas as pd
+        try:
+            excel_file = pd.ExcelFile(file_path)
+            documents = []
+            for sheet_name in excel_file.sheet_names:
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+                content = f"Sheet: {sheet_name}\n{df.to_csv(index=False)}"
+                documents.append(Document(page_content=content, metadata={"source": file_path, "page": 0, "sheet": sheet_name}))
+            return documents
+        except Exception as e:
+            raise ValueError(f"Failed to parse Excel file: {str(e)}")
     else:
         raise ValueError(
-            f"Unsupported file extension '{ext}'. Only PDF, DOCX, and TXT are supported."
+            f"Unsupported file extension '{ext}'. Supported formats: PDF, DOCX, TXT, CSV, Excel."
         )
         
     try:

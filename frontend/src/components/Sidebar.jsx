@@ -11,7 +11,10 @@ import {
   FileText,
   LogOut,
   BarChart3,
-  X
+  X,
+  GraduationCap,
+  Network,
+  Eye
 } from 'lucide-react';
 import { uploadDocument, checkHealth } from '../api';
 
@@ -24,8 +27,13 @@ export default function Sidebar({
   onClearSessions,
   activeDocument,
   setActiveDocument,
+  sessionDocuments = [],
+  onDeleteDocument,
+  onUploadSuccess,
   onLogout,
-  onOpenDashboard
+  onOpenDashboard,
+  activeTab = 'chat',
+  onChangeTab
 }) {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState(null);
@@ -72,11 +80,11 @@ export default function Sidebar({
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       const ext = getExtension(droppedFile.name);
-      if (['pdf', 'docx', 'txt'].includes(ext)) {
+      if (['pdf', 'docx', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
         setFile(droppedFile);
         setUploadState('idle');
       } else {
-        setErrorMessage("Only PDF, DOCX, and TXT files are supported");
+        setErrorMessage("Supported formats: PDF, DOCX, TXT, CSV, Excel");
         setUploadState('error');
       }
     }
@@ -86,11 +94,11 @@ export default function Sidebar({
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       const ext = getExtension(selectedFile.name);
-      if (['pdf', 'docx', 'txt'].includes(ext)) {
+      if (['pdf', 'docx', 'txt', 'csv', 'xlsx', 'xls'].includes(ext)) {
         setFile(selectedFile);
         setUploadState('idle');
       } else {
-        setErrorMessage("Only PDF, DOCX, and TXT files are supported");
+        setErrorMessage("Supported formats: PDF, DOCX, TXT, CSV, Excel");
         setUploadState('error');
       }
     }
@@ -107,7 +115,7 @@ export default function Sidebar({
     setErrorMessage('');
     
     try {
-      const data = await uploadDocument(file);
+      const data = await uploadDocument(file, sessionId);
       setUploadState('success');
       setChunkCount(data.total_chunks);
       setActiveDocument({
@@ -115,9 +123,12 @@ export default function Sidebar({
         chunks: data.total_chunks
       });
       setFile(null);
+      if (onUploadSuccess) {
+        onUploadSuccess();
+      }
     } catch (error) {
       console.error(error);
-      const detail = error.response?.data?.detail || "Upload ingestion failed. Verify API key configurations.";
+      const detail = error.response?.data?.detail || "Upload ingestion failed. Verify configurations.";
       setErrorMessage(detail);
       setUploadState('error');
     }
@@ -131,7 +142,7 @@ export default function Sidebar({
         <div className="flex items-center space-x-2">
           <Database className="w-6 h-6 text-emerald-500" />
           <span className="font-semibold text-base tracking-wide bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            AI Document Assistant
+            AI Knowledge Agent
           </span>
         </div>
         <div className="flex items-center space-x-1">
@@ -150,24 +161,79 @@ export default function Sidebar({
       <div className="p-4 flex flex-col space-y-2">
         <button
           onClick={onNewChat}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-xl text-white font-semibold text-xs shadow-[0_2px_10px_rgba(16,185,129,0.15)] focus:outline-none"
+          className="w-full flex items-center justify-center space-x-2 py-2 px-4 bg-emerald-600 hover:bg-emerald-500 transition-colors rounded-xl text-white font-semibold text-xs shadow-[0_2px_10px_rgba(16,185,129,0.15)] focus:outline-none"
         >
           <Plus className="w-4 h-4" />
           <span>New Chat Session</span>
         </button>
         <button
           onClick={onOpenDashboard}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-[#2f2f2f] hover:bg-[#383838] transition-colors border border-[#3d3d3d] rounded-xl text-gray-200 font-semibold text-xs focus:outline-none"
+          className="w-full flex items-center justify-center space-x-2 py-2 px-4 bg-[#2f2f2f] hover:bg-[#383838] transition-colors border border-[#3d3d3d] rounded-xl text-gray-200 font-semibold text-xs focus:outline-none"
         >
           <BarChart3 className="w-4 h-4 text-emerald-400" />
           <span>Admin Stats Dashboard</span>
         </button>
       </div>
 
+      {/* Workspace Tabs Navigation */}
+      {onChangeTab && (
+        <div className="px-4 pb-3 border-b border-[#2f2f2f] flex flex-col space-y-1 select-none">
+          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+            Agent Workspaces
+          </label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => onChangeTab('chat')}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                activeTab === 'chat' 
+                  ? 'bg-emerald-600/10 border-emerald-500/50 text-emerald-400' 
+                  : 'bg-[#212121] border-[#333] hover:border-gray-500 text-gray-400'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+            </button>
+            <button
+              onClick={() => onChangeTab('study')}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                activeTab === 'study' 
+                  ? 'bg-emerald-600/10 border-emerald-500/50 text-emerald-400' 
+                  : 'bg-[#212121] border-[#333] hover:border-gray-500 text-gray-400'
+              }`}
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>Study</span>
+            </button>
+            <button
+              onClick={() => onChangeTab('graph')}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                activeTab === 'graph' 
+                  ? 'bg-emerald-600/10 border-emerald-500/50 text-emerald-400' 
+                  : 'bg-[#212121] border-[#333] hover:border-gray-500 text-gray-400'
+              }`}
+            >
+              <Network className="w-3.5 h-3.5" />
+              <span>GraphRAG</span>
+            </button>
+            <button
+              onClick={() => onChangeTab('preview')}
+              className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center space-x-1.5 border transition-all ${
+                activeTab === 'preview' 
+                  ? 'bg-emerald-600/10 border-emerald-500/50 text-emerald-400' 
+                  : 'bg-[#212121] border-[#333] hover:border-gray-500 text-gray-400'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Preview</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Document Ingestion Widget */}
-      <div className="px-4 pb-4 border-b border-[#2f2f2f]">
+      <div className="p-4 border-b border-[#2f2f2f]">
         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-          Ingest Document (PDF, DOCX, TXT)
+          Ingest Knowledge Files
         </label>
         
         <div 
@@ -185,7 +251,7 @@ export default function Sidebar({
           <input 
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx,.txt"
+            accept=".pdf,.docx,.txt,.csv,.xlsx,.xls"
             onChange={handleFileChange}
             className="hidden"
             disabled={uploadState === 'uploading'}
@@ -195,7 +261,7 @@ export default function Sidebar({
           <p className="text-xs text-gray-300 font-medium">
             Drag & drop here, or <span className="text-emerald-400 hover:underline">browse</span>
           </p>
-          <p className="text-[10px] text-gray-500 mt-1">PDF, DOCX, TXT files up to 20MB</p>
+          <p className="text-[10px] text-gray-500 mt-1">PDF, DOCX, TXT, CSV, Excel up to 20MB</p>
         </div>
 
         {/* Selected File Details */}
@@ -268,6 +334,48 @@ export default function Sidebar({
         )}
       </div>
 
+      {/* Current Session Documents */}
+      <div className="p-4 border-b border-[#2f2f2f]">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            Current Session Documents
+          </label>
+          <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-900 px-1.5 py-0.5 rounded font-semibold font-mono">
+            Session: Current Chat
+          </span>
+        </div>
+        
+        {sessionDocuments && sessionDocuments.length > 0 ? (
+          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+            {sessionDocuments.map((doc) => (
+              <div 
+                key={doc.document_id} 
+                className="flex items-center justify-between p-2 bg-[#212121] hover:bg-[#262626] border border-[#2f2f2f] rounded-lg text-xs transition-colors group"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <span className="text-gray-400 shrink-0">📄</span>
+                  <div className="truncate">
+                    <p className="font-medium text-gray-300 truncate max-w-[140px]" title={doc.document_name}>
+                      {doc.document_name}
+                    </p>
+                    <p className="text-[9px] text-gray-500">{doc.chunk_count} chunks active</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDeleteDocument(doc.document_id)}
+                  className="text-gray-500 hover:text-rose-400 p-1 rounded transition-colors"
+                  title="Remove Document from Session"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-gray-500 italic">No documents uploaded to this session.</p>
+        )}
+      </div>
+
       {/* Chat History Sessions */}
       <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
         <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
@@ -295,7 +403,7 @@ export default function Sidebar({
               </div>
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // Stop click propagating to session selector
+                  e.stopPropagation(); // Stop click propagating
                   onDeleteSession(sess.id);
                 }}
                 className="opacity-0 group-hover:opacity-100 hover:text-rose-400 text-gray-500 transition-all focus:outline-none"
