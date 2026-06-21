@@ -4,6 +4,48 @@ import axios from 'axios';
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 let isOfflineMode = true;
 
+axios.defaults.timeout = 15000;
+
+// Axios response interceptor for retrying failed GET requests and parsing friendly error messages
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const { config, response } = error;
+    
+    // Do not retry if config is missing, method is not GET, already retried, or is the health endpoint
+    if (!config || config.method !== 'get' || config.__isRetryRequest || (config.url && config.url.endsWith('/health'))) {
+      if (!response) {
+        error.message = "Network connection failure. Please verify the backend service is running.";
+      } else if (response.status >= 500) {
+        error.message = "Server error. Please try again or contact the administrator.";
+      }
+      return Promise.reject(error);
+    }
+    
+    const isTimeout = error.code === 'ECONNABORTED';
+    const isNetworkError = !response;
+    const is5xx = response && response.status >= 500;
+    
+    if (isTimeout || isNetworkError || is5xx) {
+      config.__isRetryRequest = true;
+      try {
+        // Wait 1 second before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return await axios(config);
+      } catch (retryError) {
+        if (!retryError.response) {
+          retryError.message = "Network connection failure. Please verify the backend service is running.";
+        } else if (retryError.response.status >= 500) {
+          retryError.message = "Server error. Please try again or contact the administrator.";
+        }
+        return Promise.reject(retryError);
+      }
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
 const getHeaders = () => {
   const token = localStorage.getItem('rag_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
