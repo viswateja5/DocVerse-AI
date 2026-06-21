@@ -30,7 +30,98 @@ logger = logging.getLogger("rag-backend")
 # In-memory query counter for admin stats
 _query_count = 0
 
-async def ingest_document(file: UploadFile, user_id: int, db: AsyncSession, session_id: Optional[str] = None) -> int:
+import hashlib
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+_thread_executor = ThreadPoolExecutor(max_workers=4)
+
+async def process_document_background(
+    doc_id: str,
+    file_path: str,
+    user_id: int,
+    session_id: Optional[str],
+    file_hash: str,
+    session_maker = None
+) -> None:
+    if session_maker is None:
+        from database.connection import async_session_maker as session_maker
+        
+    async def update_status(status_str: str, chunk_count: int = 0):
+        async with session_maker() as db:
+            result = await db.execute(
+                select(UploadFileModel).where(UploadFileModel.document_id == doc_id)
+            )
+            doc_rec = result.scalars().first()
+            if doc_rec:
+                doc_rec.status = status_str
+                if chunk_count > 0:
+                    doc_rec.chunk_count = chunk_count
+                await db.commit()
+                
+    try:
+        # Phase 1: Extracting
+        await update_status("Extracting")
+        loop = asyncio.get_running_loop()
+        documents = await loop.run_in_executor(_thread_executor, load_document, file_path)
+        
+        # Phase 2: Chunking
+        await update_status("Chunking")
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=150,
+            length_function=len,
+            add_start_index=True
+        )
+        chunks = splitter.split_documents(documents)
+        
+        if not chunks:
+            raise ValueError("No text chunks extracted.")
+            
+        from datetime import datetime, timezone
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for chunk in chunks:
+            chunk.metadata["session_id"] = session_id or "default"
+            chunk.metadata["document_id"] = doc_id
+            chunk.metadata["document_name"] = os.path.basename(file_path)
+            chunk.metadata["upload_timestamp"] = timestamp
+            
+        # Phase 3: Embedding
+        await update_status("Embedding")
+        embeddings = get_embeddings_model()
+        
+        # Phase 4: Indexing
+        await update_status("Indexing")
+        save_or_update_vector_store(chunks, embeddings, "vector_store")
+        
+        # GraphRAG
+        try:
+            from graph_rag.graph_manager import build_entity_graph
+            await build_entity_graph(documents, session_id or "default")
+        except Exception as ge:
+            logger.warning(f"GraphRAG entity extraction failed: {ge}")
+            
+        # Phase 5: Ready
+        await update_status("Ready", len(chunks))
+        logger.info(f"Ingested background document {os.path.basename(file_path)}. Chunks: {len(chunks)}")
+        
+    except Exception as e:
+        logger.error(f"Background ingestion failed for {os.path.basename(file_path)}: {e}", exc_info=True)
+        await update_status("Failed")
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+
+async def ingest_document(
+    file: UploadFile, 
+    user_id: int, 
+    db: AsyncSession, 
+    session_id: Optional[str] = None,
+    background_tasks = None,
+    is_testing: bool = False
+) -> tuple[int, str, str]:
     """
     Saves and processes an uploaded document (PDF, DOCX, or TXT).
     Saves metadata to database and updates local FAISS vector store.
@@ -38,70 +129,85 @@ async def ingest_document(file: UploadFile, user_id: int, db: AsyncSession, sess
     os.makedirs("uploads", exist_ok=True)
     file_path = os.path.join("uploads", file.filename)
     
-    # Save the file stream
-    with open(file_path, "wb") as buffer:
-        import shutil
-        shutil.copyfileobj(file.file, buffer)
-        
-    try:
-        # 1. Parse text using our custom loaders
-        documents = load_document(file_path)
-        
-        # 2. Split text using RecursiveCharacterTextSplitter
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200,
-            length_function=len,
-            add_start_index=True
-        )
-        chunks = splitter.split_documents(documents)
-        
-        if not chunks:
-            raise ValueError("No text chunks could be extracted from the document.")
-            
-        # Add metadata tagging for session isolation
-        import uuid
-        from datetime import datetime, timezone
-        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
-        timestamp = datetime.now(timezone.utc).isoformat()
-        
-        for chunk in chunks:
-            chunk.metadata["session_id"] = session_id or "default"
-            chunk.metadata["document_id"] = doc_id
-            chunk.metadata["document_name"] = file.filename
-            chunk.metadata["upload_timestamp"] = timestamp
-            
-        # 3. Generate embeddings and save to local FAISS store
+    # Read the file to hash it
+    file_bytes = await file.read()
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
+    
+    # Reset file cursor for saving/processing
+    await file.seek(0)
+    
+    # Check for duplicate
+    result = await db.execute(
+        select(UploadFileModel)
+        .where(UploadFileModel.file_hash == file_hash, UploadFileModel.status == "Ready")
+    )
+    duplicate = result.scalars().first()
+    
+    doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+    
+    if duplicate:
+        logger.info(f"Duplicate document detected (hash={file_hash}). Reusing existing vectors.")
         embeddings = get_embeddings_model()
-        save_or_update_vector_store(chunks, embeddings, "vector_store")
         
-        # 3.5 Build GraphRAG entities (session-specific)
         try:
-            from graph_rag.graph_manager import build_entity_graph
-            await build_entity_graph(documents, session_id or "default")
-        except Exception as ge:
-            logger.warning(f"GraphRAG entity extraction failed: {ge}")
+            vector_db = load_vector_store("vector_store", embeddings)
+            dup_chunks = []
+            for key, doc in vector_db.docstore._dict.items():
+                if doc.metadata.get("document_id") == duplicate.document_id:
+                    meta = doc.metadata.copy()
+                    meta["session_id"] = session_id or "default"
+                    meta["document_id"] = doc_id
+                    dup_chunks.append(Document(page_content=doc.page_content, metadata=meta))
+                    
+            if dup_chunks:
+                save_or_update_vector_store(dup_chunks, embeddings, "vector_store")
+        except Exception as ve:
+            logger.warning(f"Failed to copy duplicate vectors in FAISS: {ve}")
             
-        # 4. Save metadata record to database
+        # Add metadata record to DB immediately as Ready
         db_file = UploadFileModel(
             filename=file.filename,
             user_id=user_id,
-            chunk_count=len(chunks),
+            chunk_count=duplicate.chunk_count,
             session_id=session_id,
-            document_id=doc_id
+            document_id=doc_id,
+            file_hash=file_hash,
+            status="Ready"
         )
         db.add(db_file)
         await db.commit()
+        return duplicate.chunk_count, doc_id, "Ready"
+
+    # Save the file stream
+    with open(file_path, "wb") as buffer:
+        buffer.write(file_bytes)
+        
+    db_file = UploadFileModel(
+        filename=file.filename,
+        user_id=user_id,
+        chunk_count=0,
+        session_id=session_id,
+        document_id=doc_id,
+        file_hash=file_hash,
+        status="Processing"
+    )
+    db.add(db_file)
+    await db.commit()
+    await db.refresh(db_file)
+    
+    from sqlalchemy.ext.asyncio import async_sessionmaker
+    session_maker = async_sessionmaker(bind=db.bind, class_=AsyncSession, expire_on_commit=False)
+    
+    if is_testing:
+        await process_document_background(doc_id, file_path, user_id, session_id, file_hash, session_maker)
         await db.refresh(db_file)
-        
-        logger.info(f"Ingested {file.filename} for session {session_id}. Chunks generated: {len(chunks)}")
-        return len(chunks)
-        
-    except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        logger.error(f"Ingestion failed for {file.filename}: {e}", exc_info=True)
-        raise e
+        return db_file.chunk_count, doc_id, "Ready"
+    else:
+        if background_tasks:
+            background_tasks.add_task(
+                process_document_background, doc_id, file_path, user_id, session_id, file_hash, session_maker
+            )
+        return 0, doc_id, "Processing"
 
 async def get_or_create_session(
     db: AsyncSession, 
@@ -172,21 +278,41 @@ async def query_rag_stream(
         reranked_docs = []
         is_web_fallback = False
         
+        # Dynamic candidate & reranking calculation based on classified query (Rule 13, 14)
+        def classify_query_type(q: str) -> str:
+            q_low = q.lower()
+            if any(w in q_low for w in ["compare", "comparison", "difference", "versus", "vs", "contrast"]):
+                return "comparison"
+            if any(w in q_low for w in ["summarize", "summary", "overview", "revision", "outline"]):
+                return "summary"
+            return "simple"
+            
+        q_type = classify_query_type(query)
+        if q_type == "comparison":
+            candidate_k = 30
+            rerank_top_n = 20
+        elif q_type == "summary":
+            candidate_k = 25
+            rerank_top_n = 15
+        else:
+            candidate_k = 20
+            rerank_top_n = 5
+            
         # 2. Candidate Retrieval
         if faiss_active and vector_db:
             try:
-                # Retrieve top 10 candidate document chunks via hybrid (BM25 + FAISS)
+                # Retrieve top candidates via hybrid (BM25 + FAISS)
                 retriever = create_hybrid_retriever(
                     vector_db, 
-                    top_k=10, 
+                    top_k=candidate_k, 
                     session_id=session_id, 
                     global_search=global_search
                 )
                 retrieved_docs = await retriever.ainvoke(query)
                 
                 # 3. Cross-Encoder Reranking
-                # Filter down to the top K=10 chunks
-                reranked_docs = rerank_documents(query, retrieved_docs, top_n=10)
+                # Filter down to top reranked chunks
+                reranked_docs = rerank_documents(query, retrieved_docs, top_n=rerank_top_n)
             except Exception as e:
                 logger.error(f"Hybrid retrieval or reranking failed: {e}")
                 

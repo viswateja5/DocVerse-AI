@@ -1,21 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  html, body {
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    background-color: #F8FAFC;
+  }
+  
   body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #1E293B;
   }
   
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Outfit', sans-serif;
+    color: #1E293B;
   }
 }
 
 /* Custom Scrollbars to match ChatGPT */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -23,12 +33,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #424242;
+  background: rgba(156, 163, 175, 0.25);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #686868;
+  background: rgba(156, 163, 175, 0.5);
 }
 
 /* Dots Pulsing Animation for Typing Indicator */
@@ -139,5 +149,21 @@
 
 .card-back {
   transform: rotateY(180deg);
+}
+
+/* Custom thin scrollbar utility class */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.2);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.4);
 }
 

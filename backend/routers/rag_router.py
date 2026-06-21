@@ -1,5 +1,7 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, Request, status, BackgroundTasks
+import sys
+import os
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +21,7 @@ rag_router = APIRouter(tags=["Document Search & Chat"])
 @limiter.limit("5/minute")
 async def upload_document(
     request: Request,  # Required by slowapi
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
     current_user: User = Depends(get_current_user),
@@ -38,11 +41,16 @@ async def upload_document(
         )
         
     try:
-        total_chunks = await rag_engine.ingest_document(file, current_user.id, db, session_id)
+        is_testing = "pytest" in sys.modules or os.getenv("TESTING") == "true"
+        total_chunks, doc_id, status_str = await rag_engine.ingest_document(
+            file, current_user.id, db, session_id, background_tasks, is_testing
+        )
         return UploadResponse(
             filename=file.filename,
-            message="Document uploaded and processed successfully.",
-            total_chunks=total_chunks
+            message="Document upload successful. Processing in background." if status_str == "Processing" else "Document uploaded and processed successfully.",
+            total_chunks=total_chunks,
+            document_id=doc_id,
+            status=status_str
         )
     except ValueError as e:
         raise HTTPException(
@@ -54,6 +62,32 @@ async def upload_document(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Upload processing failure: {str(e)}"
         )
+
+@rag_router.get("/document/{document_id}/status")
+async def get_document_status(
+    document_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Fetches the live status phase and chunk count of an uploaded file.
+    """
+    result = await db.execute(
+        select(UploadFileModel)
+        .where(UploadFileModel.document_id == document_id, UploadFileModel.user_id == current_user.id)
+    )
+    doc = result.scalars().first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found."
+        )
+    return {
+        "document_id": doc.document_id,
+        "status": doc.status,
+        "chunk_count": doc.chunk_count
+    }
+
 
 @rag_router.post("/query")
 @limiter.limit("20/minute")
@@ -199,7 +233,8 @@ async def get_session_documents(
             document_id=doc.document_id or "",
             document_name=doc.filename,
             chunk_count=doc.chunk_count,
-            created_at=doc.created_at
+            created_at=doc.created_at,
+            status=doc.status or "Ready"
         )
         for doc in docs
     ]

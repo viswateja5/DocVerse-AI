@@ -11,6 +11,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(100), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="user", nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, 
         default=lambda: datetime.now(timezone.utc), 
@@ -105,6 +106,8 @@ class UploadFileModel(Base):
     
     session_id: Mapped[Optional[str]] = mapped_column(ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
     document_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    file_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), default="Ready", nullable=False)
     
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="uploads")

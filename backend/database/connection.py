@@ -61,11 +61,23 @@ async def init_db() -> None:
         if is_sqlite:
             # Check and alter table to add columns for backward compatibility
             try:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user'"))
+            except Exception:
+                pass
+            try:
                 await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN session_id VARCHAR(50) REFERENCES chat_sessions(id) ON DELETE CASCADE"))
             except Exception:
                 pass
             try:
                 await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN document_id VARCHAR(100)"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN file_hash VARCHAR(64)"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(text("ALTER TABLE uploaded_files ADD COLUMN status VARCHAR(50) DEFAULT 'Ready'"))
             except Exception:
                 pass
             try:

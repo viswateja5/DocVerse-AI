@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
-import { Database, Loader2, UserPlus } from 'lucide-react';
+import { Database, UserPlus } from 'lucide-react';
 import { signupUser } from '../api';
+import Card from '../components/ui/Card';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import { Spinner } from '../components/ui/Loader';
 
 export default function Register({ onSignupSuccess, onNavigateToLogin }) {
   const [username, setUsername] = useState('');
@@ -41,88 +45,72 @@ export default function Register({ onSignupSuccess, onNavigateToLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0a0b0f] via-[#12131a] to-[#181922] flex flex-col justify-center items-center px-4 font-sans selection:bg-emerald-800 select-none">
-      <div className="w-full max-w-md bg-[#13141c]/95 border border-white/5 rounded-3xl p-8 shadow-[0_12px_40px_rgba(0,0,0,0.5)] backdrop-blur-md animate-fade-in">
+    <div className="w-full h-full overflow-y-auto py-8 flex flex-col justify-center items-center px-4 select-none scrollbar-thin">
+      <Card hover={false} className="w-full max-w-md border border-slate-200 dark:border-white/10 shadow-2xl p-8 relative overflow-hidden bg-white/80 dark:bg-[#1E293B]/70 backdrop-blur-xl">
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-            <Database className="w-7 h-7 text-emerald-400" />
+          <div className="w-14 h-14 bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6]/20 border border-indigo-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-[0_4px_15px_rgba(99,102,241,0.15)]">
+            <Database className="w-7 h-7 text-[#6366F1] dark:text-indigo-400" />
           </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Create Account</h1>
-          <p className="text-xs text-gray-500 mt-1 font-mono uppercase tracking-widest">Register for AI Document Search</p>
+          <h1 className="text-2xl font-extrabold text-slate-800 dark:text-white tracking-tight">Create Account</h1>
+          <p className="text-xs text-slate-400 mt-1 font-mono uppercase tracking-widest">Register for AI Document Search</p>
         </div>
 
         {error && (
-          <div className="mb-5 bg-rose-950/20 border border-rose-800/30 p-3 rounded-xl text-xs text-rose-400 font-bold text-center animate-fade-in">
+          <div className="mb-5 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/30 p-3.5 rounded-xl text-xs text-rose-600 dark:text-rose-450 font-bold text-center animate-fade-in shadow-sm">
             ⚠️ {error}
           </div>
         )}
 
         {success && (
-          <div className="mb-5 bg-emerald-950/20 border border-emerald-800/30 p-3 rounded-xl text-xs text-emerald-400 font-bold text-center animate-fade-in">
+          <div className="mb-5 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/30 p-3.5 rounded-xl text-xs text-emerald-600 dark:text-emerald-450 font-bold text-center animate-fade-in shadow-sm">
             ✅ Registration successful! Redirecting...
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-              Username
-            </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Min 3 characters"
-              className="w-full py-3 px-4 rounded-xl bg-[#181922] border border-white/5 text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300 shadow-inner"
-              disabled={loading || success}
-            />
-          </div>
+          <Input
+            id="register-username"
+            label="Username"
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Min 3 characters"
+            disabled={loading || success}
+          />
 
-          <div>
-            <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 6 characters"
-              className="w-full py-3 px-4 rounded-xl bg-[#181922] border border-white/5 text-sm text-gray-200 placeholder-gray-600 outline-none focus:border-emerald-500 transition-all duration-300 shadow-inner"
-              disabled={loading || success}
-            />
-          </div>
+          <Input
+            id="register-password"
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Min 6 characters"
+            disabled={loading || success}
+          />
 
-          <button
+          <Button
             type="submit"
             disabled={loading || success}
-            className="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] disabled:bg-gray-800 disabled:from-gray-800 disabled:to-gray-800 text-white rounded-xl text-sm font-bold flex items-center justify-center space-x-2 transition-all duration-300 shadow-[0_4px_12px_rgba(16,185,129,0.2)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] focus:outline-none mt-8"
+            variant="primary"
+            className="w-full mt-6 py-3 font-bold"
+            icon={loading ? <Spinner size="sm" className="border-white" /> : <UserPlus className="w-4 h-4 text-white" />}
           >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Creating Account...</span>
-              </>
-            ) : (
-              <>
-                <UserPlus className="w-4 h-4 text-white" />
-                <span>Sign Up</span>
-              </>
-            )}
-          </button>
+            {loading ? 'Creating Account...' : 'Sign Up'}
+          </Button>
         </form>
 
-        <div className="mt-6 text-center text-xs text-gray-500">
+        <div className="mt-6 text-center text-xs text-slate-500 dark:text-slate-400">
           Already have an account?{' '}
           <button 
             onClick={onNavigateToLogin}
-            className="text-emerald-400 hover:underline font-bold focus:outline-none transition-colors"
+            className="text-indigo-600 dark:text-indigo-400 hover:underline font-bold focus:outline-none transition-colors"
             disabled={loading || success}
           >
             Log in here
           </button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }

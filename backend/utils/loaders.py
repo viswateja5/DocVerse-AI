@@ -3,6 +3,27 @@ from typing import List
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, TextLoader
 from langchain_core.documents import Document
 
+from concurrent.futures import ThreadPoolExecutor
+import pypdf
+
+def extract_pdf_page_content(pdf_path: str, page_num: int) -> Document:
+    reader = pypdf.PdfReader(pdf_path)
+    page = reader.pages[page_num]
+    text = page.extract_text() or ""
+    return Document(page_content=text, metadata={"source": pdf_path, "page": page_num})
+
+def load_pdf_parallel(file_path: str) -> List[Document]:
+    reader = pypdf.PdfReader(file_path)
+    num_pages = len(reader.pages)
+    
+    with ThreadPoolExecutor(max_workers=min(32, num_pages or 1)) as executor:
+        futures = [
+            executor.submit(extract_pdf_page_content, file_path, i)
+            for i in range(num_pages)
+        ]
+        documents = [f.result() for f in futures]
+    return documents
+
 def load_document(file_path: str) -> List[Document]:
     """
     Loads text content from a file and returns a list of Document objects.
@@ -24,7 +45,10 @@ def load_document(file_path: str) -> List[Document]:
     ext = os.path.splitext(file_path)[1].lower()
     
     if ext == ".pdf":
-        loader = PyPDFLoader(file_path)
+        try:
+            return load_pdf_parallel(file_path)
+        except Exception as e:
+            raise ValueError(f"Failed to parse PDF document in parallel: {str(e)}")
     elif ext == ".docx":
         loader = Docx2txtLoader(file_path)
     elif ext == ".txt":

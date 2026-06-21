@@ -18,6 +18,7 @@ class UserResponse(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    role: str
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -55,12 +56,15 @@ class UploadResponse(BaseModel):
     filename: str
     message: str
     total_chunks: int
+    document_id: Optional[str] = None
+    status: Optional[str] = "Ready"
 
 class DocumentResponse(BaseModel):
     document_id: str
     document_name: str
     chunk_count: int
     created_at: datetime
+    status: Optional[str] = "Ready"
 
 # --- Admin Analytics Schemas ---
 

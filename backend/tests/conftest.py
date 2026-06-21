@@ -66,46 +66,51 @@ class MockLLM:
 patcher = patch("services.llm_factory.get_llm", return_value=MockLLM())
 patcher.start()
 
-# Now safe to import app and DB connection setups
+import database.connection
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+test_engine_instance = create_async_engine(
+    TEST_DATABASE_URL, 
+    connect_args={"check_same_thread": False}
+)
+test_session_maker = async_sessionmaker(
+    bind=test_engine_instance,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
+database.connection.async_session_maker = test_session_maker
+
+# Now safe to import app and DB connection setups
 from httpx import AsyncClient, ASGITransport
 from database.connection import Base, get_db
 from app import app
 
-# In-memory SQLite for isolated unit tests
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+# @pytest.fixture(scope="session")
+# def event_loop():
+#     """
+#     Standard event loop fixture to support pytest async operations.
+#     """
+#     try:
+#         loop = asyncio.get_running_loop()
+#     except RuntimeError:
+#         loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+#     yield loop
+#     loop.close()
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """
-    Standard event loop fixture to support pytest async operations.
-    """
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
-
-@pytest.fixture(scope="session")
+@pytest.fixture
 async def test_engine():
     """
     Sets up SQLite tables inside isolated in-memory DB context.
     """
-    engine = create_async_engine(
-        TEST_DATABASE_URL, 
-        connect_args={"check_same_thread": False}
-    )
-    
-    async with engine.begin() as conn:
+    async with test_engine_instance.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         
-    yield engine
+    yield test_engine_instance
     
-    async with engine.begin() as conn:
+    async with test_engine_instance.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
 
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:

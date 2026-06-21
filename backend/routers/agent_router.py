@@ -21,7 +21,8 @@ async def stream_agent_reasoning(
     query: str,
     session_id: str,
     user_id: int,
-    global_search: bool = False
+    global_search: bool = False,
+    username: str = ""
 ) -> StreamingResponse:
     """
     Orchestrates the LangGraph agent nodes, yielding streaming SSE JSON chunks.
@@ -34,6 +35,7 @@ async def stream_agent_reasoning(
         if cached:
             logger.info("Agent query cache hit.")
             yield f"data: {json.dumps({'type': 'decision', 'data': cached['decision']})}\n\n"
+            yield f"data: {json.dumps({'type': 'intent', 'data': cached.get('intent', 'general_knowledge')})}\n\n"
             yield f"data: {json.dumps({'type': 'trace', 'data': ['Served from Redis Cache fallback.']})}\n\n"
             yield f"data: {json.dumps({'type': 'sources', 'data': cached['sources']})}\n\n"
             yield f"data: {json.dumps({'type': 'confidence', 'data': cached['confidence_score']})}\n\n"
@@ -48,6 +50,8 @@ async def stream_agent_reasoning(
             "global_search": global_search,
             "messages": [],
             "decision": "llm",
+            "intent": "general_knowledge",
+            "username": username,
             "documents": [],
             "web_results": [],
             "reasoning_trace": ["Query received. Initializing agent graph..."]
@@ -56,8 +60,34 @@ async def stream_agent_reasoning(
         # Node 1: Router
         state = {**state, **(await route_query(state))}
         yield f"data: {json.dumps({'type': 'decision', 'data': state['decision']})}\n\n"
+        yield f"data: {json.dumps({'type': 'intent', 'data': state['intent']})}\n\n"
         yield f"data: {json.dumps({'type': 'trace', 'data': state['reasoning_trace']})}\n\n"
         
+        # Immediate greeting response optimization
+        clean_query = query.lower().strip("?.! ")
+        if state["intent"] == "greeting" and any(g in clean_query for g in ["hi", "hello", "hey", "g'day", "morning", "afternoon", "evening"]):
+            answer_text = (
+                f"Hi {username}! 👋\n"
+                "How can I help you today?\n\n"
+                "📄 Ask questions about uploaded documents\n"
+                "🌐 Ask real-time questions\n"
+                "📝 Generate MCQs and notes\n"
+                "🎓 Prepare for exams and interviews"
+            )
+            yield f"data: {json.dumps({'type': 'sources', 'data': []})}\n\n"
+            yield f"data: {json.dumps({'type': 'confidence', 'data': 1.0})}\n\n"
+            
+            async with async_session_maker() as db:
+                db.add(ChatMessage(session_id=session_id, role="user", content=query))
+                bot_msg = ChatMessage(session_id=session_id, role="assistant", content=answer_text)
+                db.add(bot_msg)
+                await db.commit()
+                
+            for token in answer_text:
+                yield f"data: {json.dumps({'type': 'content', 'data': token})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return
+            
         # Node 2: Retrieval Agent (if RAG or Hybrid)
         if state["decision"] in ["rag", "hybrid"]:
             state = {**state, **(await retrieve_documents(state))}
@@ -69,7 +99,6 @@ async def stream_agent_reasoning(
             yield f"data: {json.dumps({'type': 'trace', 'data': state['reasoning_trace']})}\n\n"
             
         # Compile Citations and Contexts
-        # 1. Apply Context Compression (reduces redundant tokens by 40%)
         from utils.context_compressor import compress_context
         compressed_documents = compress_context(state["documents"])
         
@@ -99,8 +128,9 @@ async def stream_agent_reasoning(
             
         yield f"data: {json.dumps({'type': 'sources', 'data': citations})}\n\n"
         
-        # Calculate Confidence Score (Retrieval, Reranker, LLM mapping)
+        # Calculate Confidence Score & evaluate document fallback logic
         confidence_score = 0.95
+        best_score = -99.0
         if state["decision"] in ["rag", "hybrid"]:
             if state["documents"]:
                 best_score = state["documents"][0].metadata.get("rerank_score", -99.0)
@@ -111,6 +141,21 @@ async def stream_agent_reasoning(
             confidence_score = 0.80 if state["web_results"] else 0.20
             
         yield f"data: {json.dumps({'type': 'confidence', 'data': confidence_score})}\n\n"
+        
+        # Check Fallback Logic for document-related queries
+        is_doc_related = (state["decision"] in ["rag", "hybrid"] or state["intent"] in ["document", "reasoning"])
+        if is_doc_related and (not state["documents"] or best_score < -1.5):
+            answer_text = "I couldn’t find relevant information in uploaded documents."
+            async with async_session_maker() as db:
+                db.add(ChatMessage(session_id=session_id, role="user", content=query))
+                bot_msg = ChatMessage(session_id=session_id, role="assistant", content=answer_text)
+                db.add(bot_msg)
+                await db.commit()
+                
+            for token in answer_text:
+                yield f"data: {json.dumps({'type': 'content', 'data': token})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return
         
         # Node 4: Synthesis Reasoning
         # Load conversation history from DB (including long term summaries)
@@ -131,7 +176,9 @@ async def stream_agent_reasoning(
             history_str, 
             "\n\n".join(doc_context_blocks), 
             "\n\n".join(web_context_blocks),
-            query_type=state.get("query_type", "fact")
+            query_type=state.get("query_type", "fact"),
+            intent=state.get("intent", "general_knowledge"),
+            username=username
         )
         
         answer_text = ""
@@ -196,6 +243,7 @@ async def stream_agent_reasoning(
         # Cache results
         cache_data = {
             "decision": state["decision"],
+            "intent": state["intent"],
             "sources": citations,
             "confidence_score": confidence_score,
             "answer": answer_text
@@ -214,7 +262,13 @@ async def run_agent_query(
     Main entry point for agentic RAG and real-time knowledge queries.
     Streams back JSON tracing, classifications, and text chunks.
     """
-    return await stream_agent_reasoning(body.question, body.session_id, current_user.id, body.global_search)
+    return await stream_agent_reasoning(
+        body.question, 
+        body.session_id, 
+        current_user.id, 
+        body.global_search, 
+        current_user.username
+    )
 
 @agent_router.get("/graph/path")
 async def get_graph_relationship_path(

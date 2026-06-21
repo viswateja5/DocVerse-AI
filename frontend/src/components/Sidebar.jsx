@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
   MessageSquare, 
@@ -6,19 +7,23 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Trash2, 
-  Loader2, 
   Database,
   FileText,
-  LogOut,
   BarChart3,
   X,
   GraduationCap,
   Network,
-  Eye
+  Eye,
+  Settings,
+  BookOpen,
+  LogOut
 } from 'lucide-react';
-import { uploadDocument, checkHealth } from '../api';
+import { uploadDocument, checkHealth, fetchDocumentStatus } from '../api';
+import Button from './ui/Button';
 
 export default function Sidebar({ 
+  isCollapsed = false,
+  userRole = 'user',
   sessionId, 
   sessions, 
   onSelectSession, 
@@ -32,6 +37,7 @@ export default function Sidebar({
   onUploadSuccess,
   onLogout,
   onOpenDashboard,
+  onOpenSettings,
   activeTab = 'chat',
   onChangeTab
 }) {
@@ -41,6 +47,9 @@ export default function Sidebar({
   const [errorMessage, setErrorMessage] = useState('');
   const [chunkCount, setChunkCount] = useState(null);
   const [backendStatus, setBackendStatus] = useState('connecting'); // 'connecting' | 'online' | 'offline'
+  const [processingStatus, setProcessingStatus] = useState('');
+  const [progressPercent, setProgressPercent] = useState(0);
+  const [pollingDocId, setPollingDocId] = useState(null);
   const fileInputRef = useRef(null);
 
   // Check health of backend on load
@@ -113,18 +122,25 @@ export default function Sidebar({
     
     setUploadState('uploading');
     setErrorMessage('');
+    setProgressPercent(10);
+    setProcessingStatus('Uploading');
     
     try {
       const data = await uploadDocument(file, sessionId);
-      setUploadState('success');
-      setChunkCount(data.total_chunks);
-      setActiveDocument({
-        name: file.name,
-        chunks: data.total_chunks
-      });
-      setFile(null);
-      if (onUploadSuccess) {
-        onUploadSuccess();
+      if (data.status === 'Ready') {
+        setUploadState('success');
+        const chunks = data.total_chunks !== undefined ? data.total_chunks : (data.chunk_count !== undefined ? data.chunk_count : 0);
+        setChunkCount(chunks);
+        setActiveDocument({
+          name: file.name,
+          chunks: chunks
+        });
+        setFile(null);
+        if (onUploadSuccess) {
+          onUploadSuccess();
+        }
+      } else {
+        setPollingDocId(data.document_id);
       }
     } catch (error) {
       console.error(error);
@@ -134,317 +150,522 @@ export default function Sidebar({
     }
   };
 
+  useEffect(() => {
+    if (!pollingDocId) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const data = await fetchDocumentStatus(pollingDocId);
+        if (data.status === 'Ready') {
+          clearInterval(intervalId);
+          setUploadState('success');
+          setChunkCount(data.chunk_count);
+          setActiveDocument({
+            name: file ? file.name : "Ingested Document",
+            chunks: data.chunk_count
+          });
+          setFile(null);
+          setPollingDocId(null);
+          if (onUploadSuccess) {
+            onUploadSuccess();
+          }
+        } else if (data.status === 'Failed') {
+          clearInterval(intervalId);
+          setUploadState('error');
+          setErrorMessage("Ingestion processing failed.");
+          setPollingDocId(null);
+        } else {
+          setProcessingStatus(data.status);
+          if (data.status === 'Extracting') setProgressPercent(30);
+          else if (data.status === 'Chunking') setProgressPercent(50);
+          else if (data.status === 'Embedding') setProgressPercent(70);
+          else if (data.status === 'Indexing') setProgressPercent(90);
+        }
+      } catch (err) {
+        console.error("Status polling failed:", err);
+      }
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [pollingDocId, file, activeDocument, onUploadSuccess]);
+
+  const username = localStorage.getItem('rag_username') || "Viswateja";
+  const userEmail = `${username.toLowerCase()}@enterprise.ai`;
+  const sessionCount = sessions.length;
+  const docCount = sessionDocuments.length;
+  const userInitials = username.slice(0, 2).toUpperCase();
+
+  const [activeModel, setActiveModel] = useState(() => {
+    return localStorage.getItem('active_model') || 'llama3.3';
+  });
+
+  const handleModelChange = (model) => {
+    setActiveModel(model);
+    localStorage.setItem('active_model', model);
+  };
+
+  const getFileIcon = (filename) => {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (ext === 'pdf') return <span className="text-red-500 text-[9px] font-bold">PDF</span>;
+    if (ext === 'docx' || ext === 'doc') return <span className="text-indigo-400 text-[9px] font-bold">DOCX</span>;
+    if (['csv', 'xlsx', 'xls'].includes(ext)) return <span className="text-emerald-500 text-[9px] font-bold">XLSX</span>;
+    return <span className="text-cyan-500 text-[9px] font-bold">TXT</span>;
+  };
+
   return (
-    <div className="w-full md:w-80 bg-gradient-to-b from-[#0b0c10] via-[#121318] to-[#171821] flex flex-col h-full text-gray-200 border-r border-white/5 shrink-0 font-sans shadow-[4px_0_24px_rgba(0,0,0,0.3)]">
+    <div className={`h-full bg-white flex flex-col text-[#1E293B] border-r border-[#E2E8F0] shrink-0 font-sans shadow-sm relative overflow-hidden transition-all duration-300 select-none ${
+      isCollapsed ? 'w-16' : 'w-64'
+    }`}>
       
       {/* Brand Header */}
-      <div className="p-5 border-b border-white/5 flex items-center justify-between bg-black/20">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-lg bg-emerald-950/30 border border-emerald-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(16,185,129,0.1)]">
-            <Database className="w-4 h-4 text-emerald-400" />
+      <div className={`p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50/50 ${isCollapsed ? 'justify-center' : ''}`}>
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-[#E2E8F0] flex items-center justify-center shadow-sm">
+            <Database className="w-4 h-4 text-[#6366F1]" />
           </div>
-          <span className="font-bold text-base tracking-wide bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-            AI Knowledge Agent
-          </span>
-        </div>
-        <div className="flex items-center space-x-1.5 bg-black/40 px-2 py-1 rounded-full border border-white/5">
-          <span className={`w-2 h-2 rounded-full ${
-            backendStatus === 'online' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 
-            backendStatus === 'offline' ? 'bg-rose-500 shadow-[0_0_8px_#f43f5e]' : 
-            'bg-amber-500 animate-pulse'
-          }`} />
-          <span className="text-[9px] text-gray-400 uppercase tracking-widest font-mono font-bold">
-            {backendStatus}
-          </span>
+          {!isCollapsed && (
+            <span className="font-extrabold text-sm tracking-wide text-[#1E293B] animate-fade-in">
+              DocAssistant AI
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Primary Action Panel */}
-      <div className="p-4 flex flex-col space-y-2">
-        <button
-          onClick={onNewChat}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] hover:scale-[1.01] transition-all duration-300 rounded-xl text-white font-bold text-xs shadow-[0_4px_14px_rgba(16,185,129,0.2)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.35)] focus:outline-none"
-        >
-          <Plus className="w-4 h-4" />
-          <span>New Chat Session</span>
-        </button>
-        <button
-          onClick={onOpenDashboard}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-white/5 hover:bg-white/10 active:scale-[0.98] hover:scale-[1.01] transition-all duration-300 border border-white/5 rounded-xl text-gray-200 font-bold text-xs focus:outline-none shadow-inner"
-        >
-          <BarChart3 className="w-4 h-4 text-emerald-400" />
-          <span>Admin Stats Dashboard</span>
-        </button>
-      </div>
-
-      {/* Workspace Tabs Navigation */}
-      {onChangeTab && (
-        <div className="px-4 pb-4 border-b border-white/5 flex flex-col space-y-1.5 select-none">
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">
-            Agent Workspaces
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => onChangeTab('chat')}
-              className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                activeTab === 'chat' 
-                  ? 'bg-gradient-to-r from-emerald-950/30 to-teal-950/30 border-emerald-500/40 text-emerald-400 shadow-[0_4px_12px_rgba(16,185,129,0.12)]' 
-                  : 'bg-white/5 border-transparent hover:border-white/10 text-gray-400 hover:text-white'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Chat</span>
-            </button>
-            <button
-              onClick={() => onChangeTab('study')}
-              className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                activeTab === 'study' 
-                  ? 'bg-gradient-to-r from-emerald-950/30 to-teal-950/30 border-emerald-500/40 text-emerald-400 shadow-[0_4px_12px_rgba(16,185,129,0.12)]' 
-                  : 'bg-white/5 border-transparent hover:border-white/10 text-gray-400 hover:text-white'
-              }`}
-            >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Study</span>
-            </button>
-            <button
-              onClick={() => onChangeTab('graph')}
-              className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                activeTab === 'graph' 
-                  ? 'bg-gradient-to-r from-emerald-950/30 to-teal-950/30 border-emerald-500/40 text-emerald-400 shadow-[0_4px_12px_rgba(16,185,129,0.12)]' 
-                  : 'bg-white/5 border-transparent hover:border-white/10 text-gray-400 hover:text-white'
-              }`}
-            >
-              <Network className="w-3.5 h-3.5" />
-              <span>GraphRAG</span>
-            </button>
-            <button
-              onClick={() => onChangeTab('preview')}
-              className={`py-2 px-2.5 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 border transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                activeTab === 'preview' 
-                  ? 'bg-gradient-to-r from-emerald-950/30 to-teal-950/30 border-emerald-500/40 text-emerald-400 shadow-[0_4px_12px_rgba(16,185,129,0.12)]' 
-                  : 'bg-white/5 border-transparent hover:border-white/10 text-gray-400 hover:text-white'
-              }`}
-            >
-              <Eye className="w-3.5 h-3.5" />
-              <span>Preview</span>
-            </button>
+      {/* User Profile Card */}
+      <div className={`p-4 border-b border-[#E2E8F0] bg-slate-50/20 flex flex-col space-y-3 ${isCollapsed ? 'items-center justify-center space-y-0 p-3' : ''}`}>
+        <div className="flex items-center space-x-3" title={isCollapsed ? `${username} (${userEmail})` : undefined}>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#6366F1] to-[#8B5CF6] flex items-center justify-center text-white font-extrabold text-sm shadow-md ring-2 ring-indigo-500/15 relative shrink-0">
+            <span>{userInitials}</span>
+            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${
+              backendStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'
+            }`} />
           </div>
+          {!isCollapsed && (
+            <div className="flex-1 min-w-0 animate-fade-in">
+              <div className="flex items-center space-x-1.5">
+                <p className="text-xs font-bold text-slate-800 truncate">{username}</p>
+                {userRole === 'admin' && (
+                  <span className="text-[8px] bg-indigo-50 text-indigo-600 dark:bg-indigo-950/45 dark:text-indigo-400 px-1.5 py-0.5 rounded font-extrabold uppercase tracking-wider border border-indigo-200 dark:border-indigo-800/30 shrink-0">Admin</span>
+                )}
+              </div>
+              <p className="text-[9px] text-[#64748B] truncate">{userEmail}</p>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Document Ingestion Widget */}
-      <div className="p-4 border-b border-white/5 bg-black/10">
-        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
-          Ingest Knowledge Files
-        </label>
         
-        <div 
-          onDragEnter={handleDrag}
-          onDragOver={handleDrag}
-          onDragLeave={handleDrag}
-          onDrop={handleDrop}
-          onClick={uploadState !== 'uploading' ? onButtonClick : null}
-          className={`border border-dashed rounded-xl p-4 text-center cursor-pointer transition-all duration-300 ${
-            dragActive 
-              ? 'border-emerald-500 bg-emerald-950/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]' 
-              : 'border-white/10 bg-[#16171e]/50 hover:bg-[#1c1d26]/50 hover:border-white/20 hover:scale-[1.01]'
-          }`}
-        >
-          <input 
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.docx,.txt,.csv,.xlsx,.xls"
-            onChange={handleFileChange}
-            className="hidden"
-            disabled={uploadState === 'uploading'}
-          />
-          
-          <UploadCloud className="w-8 h-8 text-gray-400 mx-auto mb-2 group-hover:text-emerald-400 transition-colors" />
-          <p className="text-xs text-gray-300 font-medium">
-            Drag & drop here, or <span className="text-emerald-400 font-bold hover:underline">browse</span>
-          </p>
-          <p className="text-[10px] text-gray-500 mt-1">PDF, DOCX, TXT, CSV, Excel up to 20MB</p>
-        </div>
-
-        {/* Selected File Details */}
-        {file && uploadState !== 'success' && (
-          <div className="mt-3 bg-[#16171f] p-3 rounded-xl flex flex-col space-y-2 border border-white/5 shadow-md animate-fade-in">
-            <div className="flex items-center space-x-2 text-xs">
-              <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="truncate font-semibold text-gray-200 max-w-[160px]">{file.name}</span>
+        {!isCollapsed && (
+          <div className="space-y-3 animate-fade-in">
+            <div className="grid grid-cols-2 gap-2 text-[9px] bg-[#F5F7FA] p-2 rounded-xl border border-[#E2E8F0] font-medium text-[#64748B]">
+              <div>
+                <span className="block font-bold text-slate-400 uppercase tracking-wider text-[8px]">Sessions</span>
+                <span className="text-[10px] font-bold text-indigo-600">{sessionCount} threads</span>
+              </div>
+              <div>
+                <span className="block font-bold text-slate-400 uppercase tracking-wider text-[8px]">Ingested</span>
+                <span className="text-[10px] font-bold text-violet-650">{docCount} docs</span>
+              </div>
             </div>
             
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleUpload();
-              }}
-              disabled={uploadState === 'uploading'}
-              className="w-full py-2 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 hover:scale-[1.01] active:scale-[0.98] text-white rounded-lg text-xs font-bold flex items-center justify-center space-x-1.5 transition-all shadow-[0_2px_8px_rgba(16,185,129,0.15)]"
-            >
-              {uploadState === 'uploading' ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Ingesting file...</span>
-                </>
-              ) : (
-                <span>Ingest Document</span>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* Alerts */}
-        {uploadState === 'success' && (
-          <div className="mt-3 bg-emerald-950/20 border border-emerald-800/30 p-2.5 rounded-xl flex items-start space-x-2.5 text-xs text-emerald-400 animate-fade-in">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
-            <div>
-              <p className="font-bold">Ingested successfully!</p>
-              <p className="text-[10px] text-emerald-500/80 mt-0.5">{chunkCount} chunks generated.</p>
-            </div>
-          </div>
-        )}
-
-        {uploadState === 'error' && (
-          <div className="mt-3 bg-rose-950/20 border border-rose-800/30 p-2.5 rounded-xl flex items-start space-x-2.5 text-xs text-rose-400 animate-fade-in">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-            <div className="truncate max-w-[200px]">
-              <p className="font-bold">Ingestion failed</p>
-              <p className="text-[10px] text-rose-500/80 mt-0.5 truncate">{errorMessage}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Active Context file */}
-        {activeDocument && (
-          <div className="mt-3 bg-[#1a1b24] p-2.5 rounded-xl border border-white/5 flex items-center justify-between text-xs text-gray-300 shadow-inner animate-fade-in">
-            <div className="flex items-center space-x-2 truncate">
-              <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-              <div className="truncate">
-                <p className="font-bold text-emerald-400 truncate max-w-[130px]">{activeDocument.name}</p>
-                <p className="text-[10px] text-gray-500 font-mono">{activeDocument.chunks} chunks active</p>
+            {/* Model Selector */}
+            <div className="flex items-center justify-between pt-1 gap-2">
+              <div className="flex-1">
+                <select 
+                  value={activeModel} 
+                  onChange={e => handleModelChange(e.target.value)}
+                  className="w-full py-1.5 px-2 bg-white border border-[#E2E8F0] rounded-lg text-[9px] font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all duration-200"
+                >
+                  <option value="llama3.3">Llama 3.3</option>
+                  <option value="gemini-pro">Gemini 1.5</option>
+                  <option value="gpt4o">GPT-4o</option>
+                </select>
+              </div>
+              <div className="flex items-center bg-[#F5F7FA] border border-[#E2E8F0] px-2 py-1 rounded-lg shrink-0">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  backendStatus === 'online' ? 'bg-emerald-500' : 'bg-rose-500'
+                }`} />
+                <span className="text-[8px] text-[#64748B] font-bold uppercase tracking-wider pl-1.5">
+                  {backendStatus}
+                </span>
               </div>
             </div>
-            <button 
-              onClick={() => setActiveDocument(null)}
-              className="text-gray-500 hover:text-rose-400 p-1 hover:bg-white/5 rounded-lg transition-all"
-              title="Deactivate Document Context"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
           </div>
         )}
       </div>
 
-      {/* Current Session Documents */}
-      <div className="p-4 border-b border-white/5">
-        <div className="flex items-center justify-between mb-2.5">
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-            Session Documents
-          </label>
-          <span className="text-[9px] bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 px-2 py-0.5 rounded-lg font-bold font-mono">
-            Active Session
-          </span>
-        </div>
+      {/* Main sidebar contents wrapper (independently scrollable) */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800 pr-0.5 space-y-4 py-3">
         
-        {sessionDocuments && sessionDocuments.length > 0 ? (
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-            {sessionDocuments.map((doc) => (
-              <div 
-                key={doc.document_id} 
-                className="flex items-center justify-between p-2.5 bg-[#16171e]/40 hover:bg-[#1c1d26] border border-white/5 hover:border-emerald-500/20 hover:scale-[1.01] rounded-xl text-xs transition-all duration-300 group shadow-sm"
-              >
-                <div className="flex items-center space-x-2 truncate">
-                  <span className="text-gray-400 shrink-0 text-sm">📄</span>
-                  <div className="truncate">
-                    <p className="font-semibold text-gray-300 truncate max-w-[140px]" title={doc.document_name}>
-                      {doc.document_name}
-                    </p>
-                    <p className="text-[9px] text-gray-500 font-mono">{doc.chunk_count} chunks indexed</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => onDeleteDocument(doc.document_id)}
-                  className="text-gray-500 hover:text-rose-400 p-1.5 hover:bg-white/5 rounded-lg transition-all active:scale-95"
-                  title="Remove Document from Session"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[11px] text-gray-500 italic px-1">No documents uploaded to this session.</p>
-        )}
-      </div>
-
-      {/* Chat History Sessions */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-2">
-        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">
-          Chat Session History
-        </label>
-        
-        {sessions.length === 0 ? (
-          <div className="text-center py-8 text-xs text-gray-500 italic">
-            No active conversations
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {sessions.map((sess) => {
-              const isSelected = sessionId === sess.id;
-              return (
-                <div
-                  key={sess.id}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all duration-200 group cursor-pointer ${
-                    isSelected 
-                      ? 'bg-gradient-to-r from-[#1c1d26] to-[#252733] text-white border border-white/5 border-l-2 border-l-emerald-500 shadow-md scale-[1.01]' 
-                      : 'hover:bg-[#16171f] text-gray-400 hover:text-gray-200 border-l-2 border-l-transparent hover:border-l-emerald-500/40'
-                  }`}
-                  onClick={() => onSelectSession(sess.id)}
-                >
-                  <div className="flex items-center space-x-2.5 truncate flex-1 mr-2">
-                    <MessageSquare className={`w-4 h-4 shrink-0 transition-colors ${
-                      isSelected ? 'text-emerald-400' : 'text-gray-500 group-hover:text-emerald-400'
-                    }`} />
-                    <span className={`truncate ${isSelected ? 'font-bold' : ''}`}>{sess.name}</span>
-                  </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation(); // Stop click propagating
-                      onDeleteSession(sess.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 hover:text-rose-400 text-gray-500 p-1 hover:bg-white/5 rounded-md transition-all active:scale-95"
-                    title="Delete Session"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Footer Clear and Logout Panel */}
-      <div className="p-4 border-t border-white/5 bg-black/20 flex flex-col space-y-2">
-        {sessions.length > 0 && (
-          <button
-            onClick={onClearSessions}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 hover:bg-rose-950/20 border border-white/5 hover:border-rose-500/30 text-gray-400 hover:text-rose-400 rounded-xl text-xs font-bold hover:scale-[1.01] active:scale-[0.98] transition-all focus:outline-none"
+        {/* Primary Action Button */}
+        <div className={`px-3 ${isCollapsed ? 'flex justify-center' : ''}`}>
+          <Button
+            variant="primary"
+            onClick={onNewChat}
+            className={`font-bold transition-all duration-300 ${isCollapsed ? 'p-2.5 rounded-full min-w-0 w-10 h-10 flex items-center justify-center' : 'w-full py-2.5 text-xs'}`}
+            icon={<Plus className="w-4 h-4 text-white shrink-0" />}
+            title={isCollapsed ? "New Chat Session" : undefined}
           >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear History</span>
-          </button>
+            {!isCollapsed && <span>New Chat</span>}
+          </Button>
+        </div>
+
+        {/* WORKSPACE CATEGORY */}
+        <div className="space-y-1">
+          {!isCollapsed ? (
+            <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-4 mb-1.5 select-none">
+              Workspace
+            </label>
+          ) : (
+            <div className="border-b border-[#E2E8F0]/80 my-2 mx-3" />
+          )}
+          <div className="px-2 space-y-1">
+            <button
+              onClick={() => onChangeTab('chat')}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
+                activeTab === 'chat' 
+                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "Chat Assistant" : undefined}
+            >
+              <MessageSquare className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">Chat Assistant</span>}
+            </button>
+
+            <button
+              onClick={() => onChangeTab('study')}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
+                activeTab === 'study' 
+                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "Study Center" : undefined}
+            >
+              <GraduationCap className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">Study Center</span>}
+            </button>
+
+            <button
+              onClick={() => onChangeTab('graph')}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
+                activeTab === 'graph' 
+                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "GraphRAG Connections" : undefined}
+            >
+              <Network className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">GraphRAG Connections</span>}
+            </button>
+
+            <button
+              onClick={() => onChangeTab('preview')}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
+                activeTab === 'preview' 
+                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "Context Preview" : undefined}
+            >
+              <Eye className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">Context Preview</span>}
+            </button>
+            
+            <button
+              onClick={() => onChangeTab('academic')}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
+                activeTab === 'academic' 
+                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
+                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "Academic Status" : undefined}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">Academic Status</span>}
+            </button>
+          </div>
+        </div>
+
+        {/* DOCUMENTS CATEGORY */}
+        <div className="space-y-1">
+          {!isCollapsed ? (
+            <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-4 mb-1.5 select-none">
+              Documents
+            </label>
+          ) : (
+            <div className="border-b border-[#E2E8F0]/80 my-2 mx-3" />
+          )}
+          
+          {/* Collapsed Ingest Button */}
+          {isCollapsed ? (
+            <div className="flex justify-center px-2">
+              <button 
+                onClick={onButtonClick}
+                className="p-2.5 rounded-xl border border-dashed border-[#E2E8F0] hover:border-indigo-400 bg-white text-[#64748B] hover:text-indigo-650 transition-all flex items-center justify-center w-10 h-10 shadow-sm"
+                title="Quick Ingest Document"
+              >
+                <UploadCloud className="w-4 h-4 shrink-0" />
+              </button>
+              <input 
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.csv,.xlsx,.xls"
+                onChange={handleFileChange}
+                className="hidden"
+                disabled={uploadState === 'uploading'}
+              />
+            </div>
+          ) : (
+            /* Expanded Ingest Widget */
+            <div className="px-3 space-y-2.5 animate-fade-in select-none">
+              <div 
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+                onClick={uploadState !== 'uploading' ? onButtonClick : null}
+                className={`border border-dashed rounded-xl p-2.5 text-center cursor-pointer transition-all duration-200 bg-[#F8FAFC] hover:bg-white hover:border-indigo-400 ${
+                  dragActive ? 'border-[#6366F1] bg-indigo-50/20' : 'border-[#E2E8F0]'
+                }`}
+              >
+                <input 
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,.csv,.xlsx,.xls"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploadState === 'uploading'}
+                />
+                <UploadCloud className="w-5 h-5 mx-auto mb-1 text-[#64748B]" />
+                <p className="text-[9px] text-[#1E293B] font-bold">
+                  Drag files, or <span className="text-indigo-600 hover:underline">browse</span>
+                </p>
+              </div>
+
+              {/* Selected File Details */}
+              {file && uploadState !== 'success' && (
+                <div className="bg-white p-2 rounded-xl border border-[#E2E8F0] flex flex-col space-y-1.5 shadow-sm animate-fade-in">
+                  <div className="flex items-center justify-between text-[9px]">
+                    <span className="truncate font-semibold text-slate-800 max-w-[130px]">{file.name}</span>
+                    <button onClick={() => setFile(null)} className="text-gray-500 hover:text-rose-500 p-0.5"><X className="w-3 h-3" /></button>
+                  </div>
+                  
+                  {uploadState === 'uploading' ? (
+                    <div className="w-full space-y-1">
+                      <div className="flex justify-between text-[7px] text-[#64748B] font-bold font-mono">
+                        <span>{processingStatus}</span>
+                        <span>{progressPercent}%</span>
+                      </div>
+                      <div className="w-full bg-[#F5F7FA] h-1 rounded-full overflow-hidden">
+                        <div className="h-full bg-[#6366F1] rounded-full" style={{ width: `${progressPercent}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <Button variant="primary" onClick={handleUpload} className="w-full py-1.5 text-[8px] font-bold">
+                      Ingest
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Ingest status alerts */}
+              {uploadState === 'success' && (
+                <div className="bg-emerald-50 border border-emerald-500/10 p-2 rounded-xl flex items-start space-x-1.5 text-[9px] text-emerald-700 animate-fade-in">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="flex-1 font-bold leading-tight">Ingested! {chunkCount} chunks.</span>
+                  <button onClick={() => setUploadState('idle')}><X className="w-3 h-3 text-emerald-500" /></button>
+                </div>
+              )}
+
+              {uploadState === 'error' && (
+                <div className="bg-rose-50 border border-rose-500/10 p-2 rounded-xl flex items-start space-x-1.5 text-[9px] text-rose-700 animate-fade-in font-bold">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                  <span className="flex-1 truncate">{errorMessage}</span>
+                  <button onClick={() => setUploadState('idle')}><X className="w-3 h-3 text-rose-500" /></button>
+                </div>
+              )}
+
+              {/* Active context file */}
+              {activeDocument && (
+                <div className="bg-indigo-50 border border-indigo-100 p-2 rounded-xl flex items-center justify-between text-[9px] text-[#1E293B] shadow-sm select-none animate-fade-in">
+                  <div className="flex items-center space-x-1.5 truncate">
+                    {getFileIcon(activeDocument.name)}
+                    <span className="font-bold text-indigo-600 truncate max-w-[125px]" title={activeDocument.name}>{activeDocument.name}</span>
+                  </div>
+                  <button onClick={() => setActiveDocument(null)} className="text-gray-500 hover:text-rose-500"><X className="w-3 h-3" /></button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Session Documents list */}
+          {!isCollapsed && (
+            <div className="px-3 pt-2 animate-fade-in">
+              <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-1 mb-1.5 select-none">
+                Session Documents
+              </label>
+              {sessionDocuments && sessionDocuments.length > 0 ? (
+                <div className="space-y-1.5 max-h-24 overflow-y-auto pr-0.5 scrollbar-thin">
+                  {sessionDocuments.map((doc) => (
+                    <div 
+                      key={doc.document_id} 
+                      className="flex items-center justify-between p-1.5 bg-[#F5F7FA] border border-[#E2E8F0] rounded-xl text-[9px] group shadow-sm transition-all"
+                    >
+                      <div className="flex items-center space-x-1.5 truncate">
+                        {getFileIcon(doc.document_name)}
+                        <span className="font-semibold text-slate-800 truncate max-w-[120px]" title={doc.document_name}>
+                          {doc.document_name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => onDeleteDocument(doc.document_id)}
+                        className="text-gray-500 hover:text-rose-500 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[9px] text-[#64748B] italic px-1 select-none">No active documents.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Conversations */}
+        {!isCollapsed && (
+          <div className="px-3 animate-fade-in space-y-1.5">
+            <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-1 mb-1 select-none">
+              Recent Conversations
+            </label>
+            
+            {sessions.length === 0 ? (
+              <div className="text-center py-4 text-[9px] text-[#64748B] italic select-none">
+                No active threads
+              </div>
+            ) : (
+              <div className="space-y-1 max-h-32 overflow-y-auto pr-0.5 select-none scrollbar-thin">
+                {sessions.map((sess) => {
+                  const isSelected = sessionId === sess.id;
+                  return (
+                    <div
+                      key={sess.id}
+                      className={`group w-full flex items-center justify-between px-2 py-1.5 rounded-xl text-[10px] cursor-pointer transition-all duration-200 border ${
+                        isSelected 
+                          ? 'bg-indigo-50 border-indigo-100 text-indigo-650 font-bold scale-[1.01]' 
+                          : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
+                      }`}
+                      onClick={() => onSelectSession(sess.id)}
+                    >
+                      <div className="flex items-center space-x-2 truncate flex-1 mr-2">
+                        <MessageSquare className="w-3 h-3 shrink-0 text-[#64748B]" />
+                        <span className="truncate">{sess.name}</span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSession(sess.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 hover:text-rose-500 text-gray-400 transition-opacity duration-150 p-0.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
-        <button
-          onClick={onLogout}
-          className="w-full flex items-center justify-center space-x-2 py-2.5 px-3 bg-white/5 hover:bg-zinc-800 border border-white/5 hover:border-zinc-700 text-gray-400 hover:text-white rounded-xl text-xs font-bold hover:scale-[1.01] active:scale-[0.98] transition-all focus:outline-none"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sign Out</span>
-        </button>
+
+        {/* ADMINISTRATION CATEGORY */}
+        {userRole === 'admin' && (
+          <div className="space-y-1">
+            {!isCollapsed ? (
+              <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-4 mb-1.5 select-none">
+                Administration
+              </label>
+            ) : (
+              <div className="border-b border-[#E2E8F0]/80 my-2 mx-3" />
+            )}
+            <div className="px-2 space-y-1">
+              <button
+                onClick={onOpenDashboard}
+                className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B] border-transparent transition-all duration-200 ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+                title={isCollapsed ? "Admin Console" : undefined}
+              >
+                <BarChart3 className="w-4 h-4 shrink-0 text-indigo-500" />
+                {!isCollapsed && <span className="animate-fade-in">Admin Console</span>}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* APPLICATION CATEGORY */}
+        <div className="space-y-1 mt-2">
+          {!isCollapsed ? (
+            <label className="block text-[8px] font-bold text-[#64748B] uppercase tracking-widest pl-4 mb-1.5 select-none">
+              Application
+            </label>
+          ) : (
+            <div className="border-b border-[#E2E8F0]/80 my-2 mx-3" />
+          )}
+          <div className="px-2 space-y-1">
+            <button
+              onClick={onOpenSettings}
+              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B] border-transparent transition-all duration-200 ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
+              title={isCollapsed ? "Settings Preferences" : undefined}
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              {!isCollapsed && <span className="animate-fade-in">Settings Preferences</span>}
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Footer Controls panel */}
+      <div className={`p-3 border-t border-[#E2E8F0] bg-slate-50 flex flex-col space-y-1.5 ${isCollapsed ? 'items-center justify-center p-2.5' : ''}`}>
+        {!isCollapsed ? (
+          <>
+            {sessions.length > 0 && (
+              <button
+                onClick={onClearSessions}
+                className="w-full flex items-center justify-center space-x-2 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-600 rounded-xl text-[9.5px] font-bold transition-all focus:outline-none"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear History</span>
+              </button>
+            )}
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center justify-center space-x-2 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl text-[9.5px] font-bold transition-all focus:outline-none"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log Out</span>
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col space-y-2">
+            {sessions.length > 0 && (
+              <button
+                onClick={onClearSessions}
+                className="p-2 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-650 rounded-xl flex items-center justify-center w-9 h-9"
+                title="Clear Chat History"
+              >
+                <Trash2 className="w-4 h-4 shrink-0" />
+              </button>
+            )}
+            <button
+              onClick={onLogout}
+              className="p-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 rounded-xl flex items-center justify-center w-9 h-9"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4 shrink-0" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

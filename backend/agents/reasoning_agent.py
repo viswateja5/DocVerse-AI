@@ -14,11 +14,13 @@ def build_agent_prompt(
     history_str: str,
     doc_context: str,
     web_context: str,
-    query_type: str = "fact"
+    query_type: str = "fact",
+    intent: str = "general_knowledge",
+    username: str = ""
 ) -> str:
     """
     Constructs the master synthesizer prompt containing all retrieved contexts.
-    Applies adaptive prompting based on the query_type classification.
+    Applies adaptive prompting based on the query_type and intent classification.
     """
     # Specialized prompt instructions based on query_type
     if query_type == "summary":
@@ -42,24 +44,46 @@ def build_agent_prompt(
             "Keep the answer precise and cite page numbers strictly where available."
         )
 
-    prompt = (
-        "You are a next-generation Agentic AI Knowledge Assistant.\n"
-        "Your task is to answer the user's question using the retrieved context blocks below.\n"
-        f"Style/Format Directives: {specialized_instruction}\n"
-        "Instructions:\n"
-        "1. Base your answer strictly on the provided context. If the query cannot be answered, say:\n"
-        "   'I could not find relevant information in the uploaded documents.'\n"
-        "2. If web search results are provided, combine them with local document context if needed.\n"
-        "3. Always maintain factual accuracy. Do not hallucinate or use outside facts unless the web search supports it.\n\n"
-    )
+    # Base prompt on intent
+    if intent in ["greeting", "casual"]:
+        prompt = (
+            "You are an elegant, friendly, professional, helpful, natural, and conversational AI Assistant.\n"
+            f"The user's name is {username or 'User'}.\n"
+            "Your personality: Always friendly, professional, helpful, natural, conversational, and warm. Never robotic or dry.\n"
+            "Instructions:\n"
+            "1. Respond to the user's greeting or casual conversation directly and naturally. Keep it warm and engaging.\n"
+            "2. Support greetings, small talk, jokes, thanking, and goodbye interactions beautifully.\n"
+            "3. If they ask who you are, give a premium, friendly introduction.\n"
+            "4. NEVER say you could not find information in uploaded documents for this friendly conversation.\n\n"
+        )
+    elif intent == "general_knowledge":
+        prompt = (
+            "You are a premium AI Assistant.\n"
+            "Your personality: Friendly, professional, helpful, and natural.\n"
+            "Instructions:\n"
+            "1. Explain general knowledge concepts, answer coding questions, or perform math/logic queries accurately.\n"
+            "2. Organize responses using rich formatting: tables, colored blocks, bullets, and clean markdown where appropriate.\n"
+            "3. Do not refer to uploaded documents unless relevant.\n\n"
+        )
+    else: # document, reasoning, etc.
+        prompt = (
+            "You are a next-generation Agentic AI Knowledge Assistant.\n"
+            "Your task is to answer the user's question using the retrieved context blocks below.\n"
+            f"Style/Format Directives: {specialized_instruction}\n"
+            "Instructions:\n"
+            "1. Base your answer strictly on the provided context. If the query cannot be answered, say:\n"
+            "   'I couldn’t find relevant information in uploaded documents.'\n"
+            "2. If web search results are provided, combine them with local document context if needed.\n"
+            "3. Always maintain factual accuracy. Do not hallucinate or use outside facts unless the web search supports it.\n\n"
+        )
     
     if history_str:
         prompt += f"Conversation History:\n{history_str}\n\n"
         
-    if doc_context:
+    if doc_context and intent not in ["greeting", "casual"]:
         prompt += f"Uploaded Document Context:\n{doc_context}\n\n"
         
-    if web_context:
+    if web_context and intent not in ["greeting", "casual"]:
         prompt += f"Web Search Context:\n{web_context}\n\n"
         
     prompt += f"User Question: {query}\nAnswer:"
@@ -73,6 +97,8 @@ async def synthesize_reasoning(state: AgentState) -> dict:
     """
     query = state.get("query", "")
     decision = state.get("decision", "llm")
+    intent = state.get("intent", "general_knowledge")
+    username = state.get("username", "")
     documents = state.get("documents", [])
     web_results = state.get("web_results", [])
     reasoning_trace = state.get("reasoning_trace", [])
@@ -80,6 +106,19 @@ async def synthesize_reasoning(state: AgentState) -> dict:
     
     reasoning_trace.append("Reasoning Synthesizer activated. Commencing context compression...")
     
+    # Check Fallback Logic for document questions
+    is_doc_related = (decision in ["rag", "hybrid"] or intent in ["document", "reasoning"])
+    best_score = documents[0].metadata.get("rerank_score", -99.0) if documents else -99.0
+    
+    if is_doc_related and (not documents or best_score < -1.5):
+        reasoning_trace.append(f"Retrieval score below threshold ({best_score} < -1.5). Triggering fallback message.")
+        return {
+            "answer": "I couldn’t find relevant information in uploaded documents.",
+            "citations": [],
+            "confidence_score": 0.20,
+            "reasoning_trace": reasoning_trace
+        }
+
     # 1. Apply Context Compression (Reduce token usage by 40% via deduplication and overlap merging)
     compressed_documents = compress_context(documents)
     if len(compressed_documents) < len(documents):
@@ -122,13 +161,12 @@ async def synthesize_reasoning(state: AgentState) -> dict:
     # 3. Calculate Confidence Level Scores (Retrieval, Reranker, LLM)
     ret_conf = "High" if (documents or web_results) else "Low"
     
-    rerank_score = documents[0].metadata.get("rerank_score", -99.0) if documents else -99.0
-    if rerank_score >= 0.0:
-        rerank_conf = "High"
-    elif rerank_score >= -1.5:
-        rerank_conf = "Medium"
-    else:
-        rerank_conf = "Low"
+    rerank_conf = "Low"
+    if documents:
+        if best_score >= 0.0:
+            rerank_conf = "High"
+        elif best_score >= -1.5:
+            rerank_conf = "Medium"
         
     # Map overall float score for frontend bar
     confidence_score = 0.95
@@ -172,11 +210,18 @@ async def synthesize_reasoning(state: AgentState) -> dict:
             logger.warning(f"Could not load session memory history inside reasoning node: {me}")
             
     # 4. Adaptive prompt compilation
-    prompt = build_agent_prompt(query, history_str, doc_context, web_context, query_type=query_type)
+    prompt = build_agent_prompt(
+        query, 
+        history_str, 
+        doc_context, 
+        web_context, 
+        query_type=query_type, 
+        intent=intent, 
+        username=username
+    )
     
     answer = ""
     try:
-        # Groq Llama-3.3-70b-versatile or fallback
         llm = get_llm(streaming=False)
         res = await llm.ainvoke(prompt)
         answer = res.content
@@ -184,10 +229,8 @@ async def synthesize_reasoning(state: AgentState) -> dict:
     except Exception as e:
         logger.warning(f"Default model synthesis failed: {e}. Executing fallback Llama-3.1-8b-instant...")
         try:
-            # Fallback model provider settings
             import os
             prev_provider = os.getenv("MODEL_PROVIDER", "groq")
-            # Explicitly force Groq fallback model if Groq is active
             if prev_provider == "groq":
                 from langchain_groq import ChatGroq
                 api_key = os.getenv("GROQ_API_KEY")

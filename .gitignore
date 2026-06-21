@@ -1,25 +1,31 @@
-# Python
+# Python virtual env, bytecodes and pytest cache
 venv/
 __pycache__/
 *.pyc
 .pytest_cache/
 
-# Environment variables
+# Environment variable secrets
 .env
+.env.*
 
-# Database and vector store
+# Database, uploads and vector store indices
 vector_store/
 uploads/
+*.db
+*.sqlite
 
-# Node
+# Node modules and production bundle distribution
 node_modules/
 dist/
+build/
 
-# VS Code
+# Editor and IDE configurations
 .vscode/
+.idea/
 
-# macOS
+# OS-specific system files
 .DS_Store
 
 # Logs
+logs/
 *.log
