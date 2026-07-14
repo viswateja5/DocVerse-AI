@@ -2,10 +2,11 @@ services:
   - type: web
     plan: free
     name: enterprise-ai-document-assistant-backend
-    env: python
+    env: docker
     rootDir: backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    dockerContext: .
+    dockerfilePath: Dockerfile
+    dockerCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MODEL_PROVIDER
         value: groq
@@ -25,3 +26,10 @@ services:
         value: sqlite+aiosqlite:///vector_store/chat_history.db
       - key: REDIS_URL
         sync: false
+
+  - type: static
+    name: enterprise-ai-document-assistant-frontend
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    publishDir: dist
