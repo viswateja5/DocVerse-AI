@@ -12,13 +12,20 @@ async def search_web_with_fallback(query: str) -> List[Document]:
     Tries searching the web via Tavily Search API. 
     If key is missing or request fails, falls back to DuckDuckGo search.
     """
+    logger.info("Attempting web search via Tavily Search API...")
     # 1. Try Tavily
-    tavily_results = await search_tavily(query)
-    if tavily_results:
-        return tavily_results
+    try:
+        tavily_results = await search_tavily(query)
+        if tavily_results:
+            logger.info("Tavily search completed successfully. Retrieved results.")
+            return tavily_results
+        else:
+            logger.warning("Tavily search returned no results or API key is not configured.")
+    except Exception as te:
+        logger.error(f"Tavily search failed with error: {str(te)}", exc_info=True)
 
     # 2. Fall back to DuckDuckGo
-    logger.info(f"Falling back to DuckDuckGo Search for query: '{query}'")
+    logger.info(f"Triggering fallback: running DuckDuckGo Search for query: '{query}'")
     try:
         # Run DuckDuckGo in executor because the wrapper is synchronous
         import asyncio
@@ -43,7 +50,7 @@ async def search_web_with_fallback(query: str) -> List[Document]:
             )
             documents.append(doc)
             
-        logger.info(f"DuckDuckGo search completed. Found {len(documents)} results.")
+        logger.info(f"DuckDuckGo search completed successfully. Found {len(documents)} results.")
         return documents
     except Exception as e:
         logger.error(f"DuckDuckGo search failed: {str(e)}", exc_info=True)
