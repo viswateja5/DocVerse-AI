@@ -175,11 +175,13 @@ export default function ChatWindow({
   const username = localStorage.getItem('rag_username') || "Viswateja";
 
   const getThinkingState = (msg) => {
-    if (!msg || !msg.reasoning_trace || msg.reasoning_trace.length === 0) return "Thinking...";
+    if (!msg) return "Thinking...";
+    if (msg.decision === "web" || msg.decision === "hybrid") return "Searching the web...";
+    if (!msg.reasoning_trace || msg.reasoning_trace.length === 0) return "Thinking...";
     const lastStep = msg.reasoning_trace[msg.reasoning_trace.length - 1].toLowerCase();
     if (lastStep.includes("router")) return "Thinking...";
     if (lastStep.includes("retrieval") || lastStep.includes("retriever") || lastStep.includes("vector")) return "Searching documents...";
-    if (lastStep.includes("web_search") || lastStep.includes("web search") || lastStep.includes("google")) return "Searching web...";
+    if (lastStep.includes("web_search") || lastStep.includes("web search") || lastStep.includes("google") || lastStep.includes("tavily")) return "Searching the web...";
     if (lastStep.includes("synthesis") || lastStep.includes("synthesizer") || lastStep.includes("complete")) return "Generating answer...";
     return "Thinking...";
   };
@@ -426,6 +428,16 @@ export default function ChatWindow({
                         ? 'bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white rounded-br-none shadow-md border border-indigo-500/20' 
                         : 'bg-white dark:bg-[#1E293B] text-slate-800 dark:text-gray-200 rounded-bl-none border border-slate-200 dark:border-white/5 shadow-md hover:border-indigo-500/10 dark:hover:border-indigo-500/15'
                     }`}>
+                      {/* Source Badge */}
+                      {!isUser && msg.decision && (
+                        <div className="mb-2 inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-black/20 border border-slate-200/60 dark:border-white/5 text-[9px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 select-none">
+                          {msg.decision === 'rag' && <span>📄 Document</span>}
+                          {msg.decision === 'web' && <span>🌐 Web Search</span>}
+                          {msg.decision === 'llm' && <span>🤖 AI Knowledge</span>}
+                          {msg.decision === 'hybrid' && <span>📄🌐 Hybrid Context</span>}
+                        </div>
+                      )}
+                      
                       {/* Render message body content with Markdown */}
                       <div className="select-text selection:bg-indigo-800 selection:text-white font-medium text-xs md:text-sm">
                         {isUser ? msg.content : renderMarkdown(msg.content)}
