@@ -22,6 +22,8 @@ def build_agent_prompt(
     Constructs the master synthesizer prompt containing all retrieved contexts.
     Applies adaptive prompting based on the query_type and intent classification.
     """
+    from datetime import datetime
+    current_date_str = datetime.now().strftime("%B %d, %Y")
     # Specialized prompt instructions based on query_type
     if query_type == "summary":
         specialized_instruction = (
@@ -59,6 +61,7 @@ def build_agent_prompt(
     elif intent == "general_knowledge":
         prompt = (
             "You are a premium AI Assistant.\n"
+            f"Current Date: {current_date_str}\n"
             "Your personality: Friendly, professional, helpful, and natural.\n"
             "Instructions:\n"
             "1. Explain general knowledge concepts, answer coding questions, or perform math/logic queries accurately.\n"
@@ -68,6 +71,7 @@ def build_agent_prompt(
     else: # document, reasoning, etc.
         prompt = (
             "You are a next-generation Agentic AI Knowledge Assistant.\n"
+            f"Current Date: {current_date_str}\n"
             "Your task is to answer the user's question using the retrieved context blocks below.\n"
             f"Style/Format Directives: {specialized_instruction}\n"
             "Instructions:\n"

@@ -65,29 +65,18 @@ async def route_query(state: AgentState) -> dict:
             "reasoning_trace": state.get("reasoning_trace", []) + [f"Fast-path regex matched: intent='{intent}', decision='llm'."]
         }
 
-    # If no documents are uploaded in the active session, bypass the LLM classifier to save latency.
-    if doc_count == 0:
-        real_time_keywords = ["weather", "news", "stock", "price", "sport", "score", "today", "current events"]
-        is_real_time = any(w in clean_query for w in real_time_keywords)
-        intent = "real_time" if is_real_time else "general_knowledge"
-        decision = "web" if is_real_time else "llm"
-        
-        return {
-            "intent": intent,
-            "decision": decision,
-            "query_type": "fact",
-            "reasoning_trace": state.get("reasoning_trace", []) + [
-                f"Bypassed LLM query classifier because active session has 0 documents. Routed query as '{intent}' -> '{decision}'."
-            ]
-        }
+    # Get current date context to help model identify temporal references
+    from datetime import datetime
+    current_date_str = datetime.now().strftime("%Y-%m-%d")
 
     system_prompt = (
         "You are an expert query routing agent.\n"
+        f"The current date is {current_date_str}.\n"
         "Your task is to analyze the user's query and classify it into one of six query intent categories:\n"
         "1. 'greeting': Friendly hello, morning wishes, thank you, goodbye, or asking what the assistant can do.\n"
         "2. 'casual': Small talk, chit-chat, telling a joke, or light banter.\n"
         "3. 'document': The query asks specifically about uploaded files, documents, user papers, or details expected to be in the database context.\n"
-        "4. 'real_time': The query asks about real-time events, current news, today's stock prices, sports scores, weather, or technology updates that require a live web search.\n"
+        "4. 'real_time': The query asks about real-time events, current news, today's stock prices, sports scores, weather, product prices, or technology/product releases/updates (like recent iPhone models, software versions, or recent specs) that require a live web search to be up-to-date.\n"
         "5. 'general_knowledge': The query asks for general knowledge, coding, programming explanations, recipes, math calculations, or generic logic.\n"
         "6. 'reasoning': The query requires multi-step analysis, logical reasoning, or combining both document context and live web search.\n\n"
         "Based on the intent, map it to one of four routing decisions:\n"
@@ -146,6 +135,15 @@ async def route_query(state: AgentState) -> dict:
         decision = "llm"
     if query_type not in ["fact", "summary", "comparison", "study"]:
         query_type = "fact"
+        
+    # Overwrite decision to bypass RAG if no documents are uploaded in the system
+    if doc_count == 0:
+        if decision == "rag":
+            decision = "llm"
+            reasoning_trace.append("Overrode decision 'rag' -> 'llm' because active session has 0 documents.")
+        elif decision == "hybrid":
+            decision = "web"
+            reasoning_trace.append("Overrode decision 'hybrid' -> 'web' because active session has 0 documents.")
 
     return {
         "intent": intent,
