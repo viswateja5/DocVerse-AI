@@ -118,7 +118,7 @@ def _get_raw_embeddings_model() -> Embeddings:
 
     # Fallback to local HuggingFace embeddings
     try:
-        from langchain_huggingface import HuggingFaceEmbeddings
+        from langchain_community.embeddings import HuggingFaceEmbeddings
     except ImportError:
         from langchain_community.embeddings import HuggingFaceEmbeddings
 
