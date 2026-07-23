@@ -17,14 +17,15 @@ import {
 } from 'lucide-react';
 import { ThemeProvider } from './components/ui/ThemeProvider';
 import { ToastProvider, useToast } from './components/ui/Toast';
-import Layout from './components/Layout';
-import Sidebar from './components/Sidebar';
-import ChatWindow from './components/ChatWindow';
 import Button from './components/ui/Button';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
 import ProtectedAdminRoute from './components/ProtectedAdminRoute';
+
+const Layout = React.lazy(() => import('./components/Layout'));
+const Sidebar = React.lazy(() => import('./components/Sidebar'));
+const ChatWindow = React.lazy(() => import('./components/ChatWindow'));
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 import { 
   fetchSessions, 
   fetchSessionHistory, 
@@ -44,7 +45,14 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
-        <MainApp />
+        <React.Suspense fallback={
+          <div className="flex h-screen w-screen flex-col items-center justify-center bg-slate-55 dark:bg-[#0F172A] text-indigo-500 select-none">
+            <div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4" />
+            <span className="font-semibold text-xs tracking-wider uppercase font-mono animate-pulse">Initializing Portal...</span>
+          </div>
+        }>
+          <MainApp />
+        </React.Suspense>
       </ToastProvider>
     </ThemeProvider>
   );
