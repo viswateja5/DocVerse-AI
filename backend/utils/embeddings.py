@@ -87,6 +87,14 @@ class CachedEmbeddings(Embeddings):
     def __call__(self, text: str) -> List[float]:
         return self.embed_query(text)
 
+class FakeEmbeddings(Embeddings):
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # Deterministic 384-d fake embeddings
+        return [[0.1 * (i % 10)] * 384 for i in range(len(texts))]
+
+    def embed_query(self, text: str) -> List[float]:
+        return [0.1] * 384
+
 @lru_cache(maxsize=1)
 def _get_raw_embeddings_model() -> Embeddings:
     """
@@ -94,6 +102,11 @@ def _get_raw_embeddings_model() -> Embeddings:
     Checks environment keys for API-based embeddings first (which use almost zero RAM),
     falling back to a local CPU-based HuggingFace model if no keys are found.
     """
+    # 1. Check for CI / Pytest environment to avoid live API calls
+    if os.getenv("CI") or os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TESTING"):
+        print("Test environment detected. Using deterministic FakeEmbeddings.")
+        return FakeEmbeddings()
+
     google_key = os.getenv("GOOGLE_API_KEY")
     if google_key and google_key != "your_google_api_key_here":
         try:
