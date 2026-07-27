@@ -1,9 +1,10 @@
 services:
   - type: web
-    plan: free
     name: enterprise-ai-document-assistant-backend
-    env: docker
+    runtime: docker
+    plan: free
     rootDir: backend
+    dockerfilePath: ./Dockerfile
     dockerCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MODEL_PROVIDER
