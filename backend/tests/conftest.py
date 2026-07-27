@@ -112,6 +112,43 @@ async def test_engine():
     async with test_engine_instance.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+@pytest.fixture(autouse=True)
+def mock_vector_store_dir(tmp_path):
+    """
+    Redirects all FAISS vector_store operations to a temporary directory during tests.
+    """
+    vector_dir = str(tmp_path / "vector_store")
+    import os
+    os.makedirs(vector_dir, exist_ok=True)
+    
+    import utils.faiss_store as faiss_store
+    original_load = faiss_store.load_vector_store
+    original_save = faiss_store.save_or_update_vector_store
+    original_delete = faiss_store.delete_document_from_vector_store
+    
+    with patch("agents.retrieval_agent.load_vector_store") as mock_load_agent, \
+         patch("services.rag_engine.load_vector_store") as mock_load_engine, \
+         patch("services.rag_engine.save_or_update_vector_store") as mock_save, \
+         patch("utils.faiss_store.delete_document_from_vector_store") as mock_delete, \
+         patch("services.educational_service.load_vector_store") as mock_load_edu:
+         
+        def mock_load_wrapper(store_path, embeddings, index_name="index"):
+            return original_load(vector_dir, embeddings, index_name)
+            
+        def mock_save_wrapper(chunks, embeddings, store_path, index_name="index"):
+            return original_save(chunks, embeddings, vector_dir, index_name)
+            
+        def mock_delete_wrapper(document_id, embeddings, store_path, index_name="index"):
+            return original_delete(document_id, embeddings, vector_dir, index_name)
+            
+        mock_load_agent.side_effect = mock_load_wrapper
+        mock_load_engine.side_effect = mock_load_wrapper
+        mock_load_edu.side_effect = mock_load_wrapper
+        mock_save.side_effect = mock_save_wrapper
+        mock_delete.side_effect = mock_delete_wrapper
+        
+        yield vector_dir
+
 @pytest.fixture
 async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     """

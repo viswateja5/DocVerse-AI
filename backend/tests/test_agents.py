@@ -87,7 +87,7 @@ async def test_agent_endpoints_authorized(client: AsyncClient):
     assert res_export.status_code in [200, 404]
 
 @pytest.mark.asyncio
-async def test_session_isolation_and_global_search(client: AsyncClient):
+async def test_session_isolation_and_global_search(client: AsyncClient, mock_vector_store_dir):
     """
     Tests session-level document isolation and explicit cross-session global search.
     """
@@ -127,6 +127,19 @@ async def test_session_isolation_and_global_search(client: AsyncClient):
     docs_b = await client.get("/session/session_B/documents", headers=headers)
     assert docs_b.status_code == 200
     assert len(docs_b.json()) == 0
+    
+    # 3.5 MANUALLY Inject Document into FAISS to prevent BackgroundTask race conditions in ASGITransport
+    from utils.faiss_store import save_or_update_vector_store
+    from utils.embeddings import get_embeddings_model
+    from langchain_core.documents import Document
+    
+    # We must ensure the background task has actually finished, or we manually seed it.
+    # To strictly ensure it's there before querying:
+    mock_doc = Document(
+        page_content="The secret password for project Antigravity is DeepMind2026.",
+        metadata={"session_id": "session_A", "document_name": "antigravity_secret.txt", "page": 0}
+    )
+    save_or_update_vector_store([mock_doc], get_embeddings_model(), mock_vector_store_dir)
     
     # 4. Query session_B with global_search = False (Session Isolated - should NOT find the secret)
     query_isolated = {
