@@ -24,8 +24,15 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
 
       - name: Run Pytest Suite
+        env:
+          GROQ_API_KEY: dummy_groq
+          OPENAI_API_KEY: dummy_openai
+          GOOGLE_API_KEY: dummy_google
+          TAVILY_API_KEY: dummy_tavily
+          JWT_SECRET_KEY: dummy_secret_key_for_testing_purposes
         run: |
           cd backend
           python -m pytest tests/
