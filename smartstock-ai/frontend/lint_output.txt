@@ -1,0 +1,359 @@
+
+> frontend@0.0.0 lint
+> oxlint
+
+
+  ! eslint(no-unused-vars): Identifier 'motion' is imported but never used.
+   ,-[src/components/layout/TopNav.tsx:3:10]
+ 2 | import { Search, Bell, User } from 'lucide-react';
+ 3 | import { motion } from 'framer-motion';
+   :          ^^^|^^
+   :             `-- 'motion' is imported here
+ 4 | 
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'memo' is imported but never used.
+   ,-[src/components/analytics/SalesCharts.tsx:1:10]
+ 1 | import { memo } from "react"
+   :          ^^|^
+   :            `-- 'memo' is imported here
+ 2 | import { Card } from "../ui/Card"
+   `----
+  help: Consider removing this import.
+
+  x Expected `)` but found `EOF`
+     ,-[src/components/analytics/Heatmap.tsx:114:1]
+ 113 | }
+     `----
+
+  ! eslint(no-unused-vars): Variable 'isHovering' is declared but never used. Unused variables should start with a '_'.
+    ,-[src/components/ui/Card.tsx:12:12]
+ 11 |     const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 })
+ 12 |     const [isHovering, setIsHovering] = React.useState(false)
+    :            ^^^^^|^^^^
+    :                 `-- 'isHovering' is declared here
+ 13 | 
+    `----
+  help: Consider removing this declaration.
+
+  ! eslint(no-unused-vars): Identifier 'ArrowLeft' is imported but never used.
+   ,-[src/pages/admin/AdminDashboard.tsx:5:91]
+ 4 | import { Card } from '../../components/ui/Card';
+ 5 | import { Users, Database, Activity, HardDrive, ShieldAlert, Cpu, Trash2, Shield, Loader2, ArrowLeft } from 'lucide-react';
+   :                                                                                           ^^^^|^^^^
+   :                                                                                               `-- 'ArrowLeft' is imported here
+ 6 | import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'LineChart' is imported but never used.
+   ,-[src/pages/admin/AdminDashboard.tsx:6:10]
+ 5 | import { Users, Database, Activity, HardDrive, ShieldAlert, Cpu, Trash2, Shield, Loader2, ArrowLeft } from 'lucide-react';
+ 6 | import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+   :          ^^^^|^^^^
+   :              `-- 'LineChart' is imported here
+ 7 | import api from '../../lib/axios';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Line' is imported but never used.
+   ,-[src/pages/admin/AdminDashboard.tsx:6:21]
+ 5 | import { Users, Database, Activity, HardDrive, ShieldAlert, Cpu, Trash2, Shield, Loader2, ArrowLeft } from 'lucide-react';
+ 6 | import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+   :                     ^^|^
+   :                       `-- 'Line' is imported here
+ 7 | import api from '../../lib/axios';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Variable 'system' is declared but never used. Unused variables should start with a '_'.
+    ,-[src/pages/admin/AdminDashboard.tsx:12:10]
+ 11 |   const [stats, setStats] = useState<any>(null);
+ 12 |   const [system, setSystem] = useState<any>(null);
+    :          ^^^|^^
+    :             `-- 'system' is declared here
+ 13 |   const [users, setUsers] = useState<any[]>([]);
+    `----
+  help: Consider removing this declaration.
+
+  ! eslint(no-unused-vars): Identifier 'Link' is imported but never used.
+   ,-[src/pages/auth/ResetPassword.tsx:4:23]
+ 3 | import { Sparkles, ArrowRight, Loader2, Lock, Eye, EyeOff } from 'lucide-react';
+ 4 | import { useNavigate, Link } from 'react-router-dom';
+   :                       ^^|^
+   :                         `-- 'Link' is imported here
+ 5 | import api from '../../lib/axios';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'api' is imported but never used.
+   ,-[src/pages/auth/ResetPassword.tsx:5:8]
+ 4 | import { useNavigate, Link } from 'react-router-dom';
+ 5 | import api from '../../lib/axios';
+   :        ^|^
+   :         `-- 'api' is imported here
+ 6 | import { Card } from '../../components/ui/Card';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'motion' is imported but never used.
+   ,-[src/pages/DatasetSchema.tsx:3:10]
+ 2 | import { useParams, useNavigate } from 'react-router-dom';
+ 3 | import { motion } from 'framer-motion';
+   :          ^^^|^^
+   :             `-- 'motion' is imported here
+ 4 | import { ArrowLeft, Check, AlertTriangle, Loader2, Target, Calendar, Hash, Tag, Fingerprint, Save } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Check' is imported but never used.
+   ,-[src/pages/DatasetSchema.tsx:4:21]
+ 3 | import { motion } from 'framer-motion';
+ 4 | import { ArrowLeft, Check, AlertTriangle, Loader2, Target, Calendar, Hash, Tag, Fingerprint, Save } from 'lucide-react';
+   :                     ^^|^^
+   :                       `-- 'Check' is imported here
+ 5 | import api from '../lib/axios';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Catch parameter 'error' is caught but never used.
+    ,-[src/pages/MyDatasets.tsx:88:14]
+ 87 |       setDatasets(datasets.filter(d => d.id !== id));
+ 88 |     } catch (error) {
+    :              ^^|^^
+    :                `-- 'error' is declared here
+ 89 |       alert('Failed to delete');
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Identifier 'Line' is imported but never used.
+   ,-[src/pages/ForecastDashboard.tsx:2:86]
+ 1 | import { motion, AnimatePresence } from 'framer-motion';
+ 2 | import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ScatterChart, Scatter, Cell, BarChart, Bar, ComposedChart } from 'recharts';
+   :                                                                                      ^^|^
+   :                                                                                        `-- 'Line' is imported here
+ 3 | import { Card } from '../components/ui/Card';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Catch parameter 'e' is caught but never used.
+    ,-[src/pages/ForecastDashboard.tsx:30:14]
+ 29 |       toast.success("CSV exported successfully");
+ 30 |     } catch (e) {
+    :              |
+    :              `-- 'e' is declared here
+ 31 |       toast.error("Failed to export CSV");
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Catch parameter 'e' is caught but never used.
+    ,-[src/pages/ForecastDashboard.tsx:58:14]
+ 57 |       toast.success("Excel exported successfully");
+ 58 |     } catch (e) {
+    :              |
+    :              `-- 'e' is declared here
+ 59 |       toast.error("Failed to export Excel");
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Catch parameter 'err' is caught but never used.
+    ,-[src/pages/ForecastDashboard.tsx:75:14]
+ 74 |       toast.success("PNG exported successfully", { id: toastId });
+ 75 |     } catch (err) {
+    :              ^|^
+    :               `-- 'err' is declared here
+ 76 |       toast.error("Failed to export PNG", { id: toastId });
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Catch parameter 'err' is caught but never used.
+    ,-[src/pages/ForecastDashboard.tsx:98:14]
+ 97 |       toast.success("PDF exported successfully", { id: toastId });
+ 98 |     } catch (err) {
+    :              ^|^
+    :               `-- 'err' is declared here
+ 99 |       toast.error("Failed to export PDF", { id: toastId });
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Catch parameter 'e' is caught but never used.
+     ,-[src/pages/ForecastDashboard.tsx:151:14]
+ 150 |         toast.success("HTML exported successfully", { id: toastId });
+ 151 |     } catch (e) {
+     :              |
+     :              `-- 'e' is declared here
+ 152 |         toast.error("Failed to generate HTML", { id: toastId });
+     `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Identifier 'api' is imported but never used.
+   ,-[src/pages/auth/ForgotPassword.tsx:5:8]
+ 4 | import { Link } from 'react-router-dom';
+ 5 | import api from '../../lib/axios';
+   :        ^|^
+   :         `-- 'api' is imported here
+ 6 | import { Card } from '../../components/ui/Card';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'motion' is imported but never used.
+   ,-[src/pages/DatasetEDA.tsx:3:10]
+ 2 | import { useParams, useNavigate } from 'react-router-dom';
+ 3 | import { motion } from 'framer-motion';
+   :          ^^^|^^
+   :             `-- 'motion' is imported here
+ 4 | import { ArrowLeft, BarChart3, AlertTriangle, Layers, Target, Loader2, Info } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Catch parameter 'error' is caught but never used.
+    ,-[src/context/AuthContext.tsx:30:14]
+ 29 |       setUser(data);
+ 30 |     } catch (error) {
+    :              ^^|^^
+    :                `-- 'error' is declared here
+ 31 |       setUser(null);
+    `----
+  help: Consider handling this error.
+
+  ! react(only-export-components): Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components.
+    ,-[src/context/AuthContext.tsx:65:14]
+ 64 | 
+ 65 | export const useAuth = () => {
+    :              ^^^^^^^
+ 66 |   const context = useContext(AuthContext);
+    `----
+
+  ! eslint(no-unused-vars): Identifier 'useNavigate' is imported but never used.
+   ,-[src/pages/Forecast.tsx:3:27]
+ 2 | import { motion, AnimatePresence } from 'framer-motion';
+ 3 | import { useSearchParams, useNavigate } from 'react-router-dom';
+   :                           ^^^^^|^^^^^
+   :                                `-- 'useNavigate' is imported here
+ 4 | import { useDropzone } from 'react-dropzone';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Play' is imported but never used.
+   ,-[src/pages/Forecast.tsx:6:16]
+ 5 | import { 
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+   :                ^^|^
+   :                  `-- 'Play' is imported here
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Settings2' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:14]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :              ^^^^|^^^^
+   :                  `-- 'Settings2' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Target' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:25]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                         ^^^|^^
+   :                            `-- 'Target' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Calendar' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:33]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                 ^^^^|^^^
+   :                                     `-- 'Calendar' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Fingerprint' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:43]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                           ^^^^^|^^^^^
+   :                                                `-- 'Fingerprint' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Hash' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:56]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                                        ^^|^
+   :                                                          `-- 'Hash' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Tag' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:62]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                                              ^|^
+   :                                                               `-- 'Tag' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Cpu' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:77]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                                                             ^|^
+   :                                                                              `-- 'Cpu' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Identifier 'Layers' is imported but never used.
+   ,-[src/pages/Forecast.tsx:7:82]
+ 6 |   UploadCloud, Play, Loader2, ArrowRight, ArrowLeft, BrainCircuit, CheckCircle2, 
+ 7 |   BarChart3, Settings2, Target, Calendar, Fingerprint, Hash, Tag, Activity, Cpu, Layers
+   :                                                                                  ^^^|^^
+   :                                                                                     `-- 'Layers' is imported here
+ 8 | } from 'lucide-react';
+   `----
+  help: Consider removing this import.
+
+  ! eslint(no-unused-vars): Catch parameter 'err' is caught but never used.
+    ,-[src/pages/Forecast.tsx:44:14]
+ 43 |       setTimeout(() => onComplete(res.data.id), 2000);
+ 44 |     } catch (err) {
+    :              ^|^
+    :               `-- 'err' is declared here
+ 45 |       alert("Upload failed.");
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Catch parameter 'err' is caught but never used.
+    ,-[src/pages/Forecast.tsx:90:16]
+ 89 |         setData(res.data);
+ 90 |       } catch (err) {
+    :                ^|^
+    :                 `-- 'err' is declared here
+ 91 |         // Retry logic for async profiling
+    `----
+  help: Consider handling this error.
+
+  ! eslint(no-unused-vars): Variable 'schema' is declared but never used. Unused variables should start with a '_'.
+     ,-[src/pages/Forecast.tsx:289:10]
+ 288 |   const [datasetId, setDatasetId] = useState<number | null>(initId ? parseInt(initId) : null);
+ 289 |   const [schema, setSchema] = useState<any>(null);
+     :          ^^^|^^
+     :             `-- 'schema' is declared here
+ 290 |   const [horizon, setHorizon] = useState<number>(30);
+     `----
+  help: Consider removing this declaration.
+
+Found 35 warnings and 1 error.
+Finished in 8ms on 43 files with 103 rules using 8 threads.
