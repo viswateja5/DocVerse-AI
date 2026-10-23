@@ -14,7 +14,8 @@ if not hasattr(bcrypt, "__about__"):
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, Response, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
@@ -107,9 +108,16 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Configure custom Prometheus MonitorMiddleware
 app.add_middleware(MonitorMiddleware)
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
 # Basic liveness response; intentionally does not touch databases, caches, or ML models.
 @app.get("/")
-async def root():
+async def root(request: Request):
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept and not accept.strip() == "*/*":
+        index_file = STATIC_DIR / "index.html"
+        if index_file.is_file():
+            return FileResponse(index_file)
     return {
         "application": "DocVerse AI",
         "status": "API is running",
@@ -167,6 +175,25 @@ app.include_router(agent_router)
 app.include_router(voice_router)
 app.include_router(edu_router)
 app.include_router(export_router)
+
+# Mount Static Assets and SPA Fallback for browser navigation
+if STATIC_DIR.is_dir():
+    assets_dir = STATIC_DIR / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa_fallback(full_path: str):
+        candidate_file = STATIC_DIR / full_path
+        if candidate_file.is_file():
+            return FileResponse(candidate_file)
+        index_file = STATIC_DIR / "index.html"
+        if index_file.is_file():
+            return FileResponse(index_file)
+        return JSONResponse(
+            status_code=404,
+            content={"detail": "Not found"}
+        )
 
 if __name__ == "__main__":
     import uvicorn
