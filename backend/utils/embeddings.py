@@ -5,13 +5,12 @@ from typing import List, Any
 def get_device() -> str:
     """
     Returns the best available device for inference.
+    Defaults to CPU (or CUDA if available) to avoid MPS shader compilation failures on macOS.
     """
     try:
         import torch
         if torch.cuda.is_available():
             return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
     except ImportError:
         pass
     return "cpu"

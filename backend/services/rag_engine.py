@@ -3,7 +3,7 @@ import json
 import logging
 import uuid
 from typing import AsyncGenerator, List, Dict, Any, Optional
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from langchain_core.documents import Document
@@ -22,7 +22,6 @@ from utils.faiss_store import save_or_update_vector_store, load_vector_store
 from utils.search import create_hybrid_retriever
 from utils.rerank import rerank_documents
 from services.llm_factory import get_llm, get_llm_error_message
-from services.web_search import search_tavily
 from cache.redis_cache import get_cached, set_cached
 
 logger = logging.getLogger("rag-backend")
@@ -83,6 +82,7 @@ async def process_document_background(
         for chunk in chunks:
             chunk.metadata["session_id"] = session_id or "default"
             chunk.metadata["document_id"] = doc_id
+            chunk.metadata["user_id"] = user_id
             chunk.metadata["document_name"] = os.path.basename(file_path)
             chunk.metadata["upload_timestamp"] = timestamp
             
@@ -94,16 +94,16 @@ async def process_document_background(
         await update_status("Indexing")
         save_or_update_vector_store(chunks, embeddings, "vector_store")
         
-        # GraphRAG
+        # Phase 5: Ready (marked immediately after vector store indexing)
+        await update_status("Ready", len(chunks))
+        logger.info(f"Ingested background document {os.path.basename(file_path)}. Chunks: {len(chunks)}")
+        
+        # GraphRAG (optional background enrichment)
         try:
             from graph_rag.graph_manager import build_entity_graph
             await build_entity_graph(documents, session_id or "default")
         except Exception as ge:
             logger.warning(f"GraphRAG entity extraction failed: {ge}")
-            
-        # Phase 5: Ready
-        await update_status("Ready", len(chunks))
-        logger.info(f"Ingested background document {os.path.basename(file_path)}. Chunks: {len(chunks)}")
         
     except Exception as e:
         logger.error(f"Background ingestion failed for {os.path.basename(file_path)}: {e}", exc_info=True)
@@ -131,6 +131,8 @@ async def ingest_document(
     
     # Read the file to hash it
     file_bytes = await file.read()
+    if not file_bytes or not file_bytes.strip():
+        raise ValueError("Uploaded file is empty or contains no extractable content.")
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     
     # Reset file cursor for saving/processing
@@ -157,6 +159,7 @@ async def ingest_document(
                     meta = doc.metadata.copy()
                     meta["session_id"] = session_id or "default"
                     meta["document_id"] = doc_id
+                    meta["user_id"] = user_id
                     dup_chunks.append(Document(page_content=doc.page_content, metadata=meta))
                     
             if dup_chunks:
@@ -218,10 +221,16 @@ async def get_or_create_session(
     Retrieves or creates a ChatSession record in the database.
     """
     result = await db.execute(
-        select(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user_id)
+        select(ChatSession).where(ChatSession.id == session_id)
     )
     session = result.scalars().first()
     
+    if session and session.user_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Chat session '{session_id}' not found.",
+        )
+
     if not session:
         session = ChatSession(id=session_id, name="New Conversation", user_id=user_id)
         db.add(session)
@@ -229,6 +238,22 @@ async def get_or_create_session(
         await db.refresh(session)
         
     return session
+
+
+async def validate_session_access(
+    db: AsyncSession,
+    session_id: str,
+    user_id: int,
+) -> None:
+    result = await db.execute(
+        select(ChatSession.user_id).where(ChatSession.id == session_id)
+    )
+    owner_id = result.scalar_one_or_none()
+    if owner_id is not None and owner_id != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Chat session '{session_id}' not found.",
+        )
 
 async def query_rag_stream(
     query: str,
@@ -265,18 +290,37 @@ async def query_rag_stream(
         user_msg = ChatMessage(session_id=session_id, role="user", content=query)
         db.add(user_msg)
         await db.commit()
+
+        authorized_documents_query = select(UploadFileModel.document_id).where(
+            UploadFileModel.user_id == user_id,
+            UploadFileModel.status == "Ready",
+            UploadFileModel.document_id.is_not(None),
+        )
+        if not global_search:
+            authorized_documents_query = authorized_documents_query.where(
+                UploadFileModel.session_id == session_id
+            )
+        authorized_documents_result = await db.execute(authorized_documents_query)
+        allowed_document_ids = {
+            document_id
+            for (document_id,) in authorized_documents_result.all()
+            if document_id
+        }
         
         # Load Vector Store
-        embeddings = get_embeddings_model()
         faiss_active = True
         vector_db = None
         try:
+            embeddings = get_embeddings_model()
             vector_db = load_vector_store("vector_store", embeddings)
-        except Exception:
+        except Exception as retrieval_error:
             faiss_active = False
+            logger.warning(
+                "Local document retrieval is unavailable (%s).",
+                type(retrieval_error).__name__,
+            )
             
         reranked_docs = []
-        is_web_fallback = False
         
         # Dynamic candidate & reranking calculation based on classified query (Rule 13, 14)
         def classify_query_type(q: str) -> str:
@@ -299,16 +343,21 @@ async def query_rag_stream(
             rerank_top_n = 5
             
         # 2. Candidate Retrieval
-        if faiss_active and vector_db:
+        if faiss_active and vector_db and allowed_document_ids:
             try:
                 # Retrieve top candidates via hybrid (BM25 + FAISS)
                 retriever = create_hybrid_retriever(
                     vector_db, 
                     top_k=candidate_k, 
                     session_id=session_id, 
-                    global_search=global_search
+                    global_search=global_search,
+                    allowed_document_ids=allowed_document_ids,
                 )
                 retrieved_docs = await retriever.ainvoke(query)
+                from utils.search import filter_documents_by_ids
+                retrieved_docs = filter_documents_by_ids(
+                    retrieved_docs, allowed_document_ids
+                )
                 
                 # 3. Cross-Encoder Reranking
                 # Filter down to top reranked chunks
@@ -316,18 +365,43 @@ async def query_rag_stream(
             except Exception as e:
                 logger.error(f"Hybrid retrieval or reranking failed: {e}")
                 
-        # 4. Confidence Threshold Check & Web Search Fallback
-        # If the highest score is below -2.0 (low confidence) or if FAISS is offline,
-        # we trigger the Tavily Search API wrapper fallback.
+        # This endpoint is document-only; live web search is routed through /agent/query.
         best_score = reranked_docs[0].metadata.get("rerank_score", -99.0) if reranked_docs else -99.0
-        
-        # Check threshold
-        if not reranked_docs or best_score < -2.0:
-            logger.info(f"Confidence score {best_score} is below threshold. Running Web Search Fallback...")
-            web_docs = await search_tavily(query)
-            if web_docs:
-                reranked_docs = web_docs[:4]
-                is_web_fallback = True
+
+        if not reranked_docs:
+            if not allowed_document_ids:
+                answer_text = (
+                    "No authorized documents are available in this session. "
+                    "Upload a document before asking document-based questions."
+                )
+            elif not faiss_active:
+                answer_text = (
+                    "Local document retrieval is unavailable because the FAISS index "
+                    "or embedding model could not be loaded. Rebuild the local index "
+                    "or resolve the local model error before retrying."
+                )
+            else:
+                answer_text = (
+                    "I could not find relevant information in the uploaded documents."
+                )
+            yield json.dumps({"type": "sources", "data": []}) + "\n"
+            yield json.dumps({"type": "content", "data": answer_text}) + "\n"
+            yield json.dumps({"type": "done"}) + "\n"
+
+            bot_msg = ChatMessage(
+                session_id=session_id,
+                role="assistant",
+                content=answer_text,
+            )
+            bot_msg.sources = []
+            db.add(bot_msg)
+            await db.commit()
+            await set_cached(
+                cache_key,
+                {"answer": answer_text, "sources": []},
+                expire_seconds=3600,
+            )
+            return
 
         # Format source citations list
         sources_list = []
@@ -366,10 +440,11 @@ async def query_rag_stream(
         ])
         
         prompt_text = (
-            "You are an AI assistant designed to help search documents.\n"
-            "Answer the user's question using ONLY the provided document context below.\n"
-            "If the answer is not present in the context, reply exactly with: "
-            "'I could not find relevant information in the uploaded documents.'\n"
+            "You are a precise, grounded AI Document Assistant.\n"
+            "Answer the user's question directly using ONLY the provided document context below.\n"
+            "Preserve exact numbers, amounts (e.g. ₹ amounts), dates, and names from the source documents.\n"
+            "Cite the source filename and page numbers where available (e.g. '(Source: filename, Page: X)').\n"
+            "If the retrieved context does not contain sufficient information to answer the question, clearly state that the uploaded documents do not contain this information.\n"
             "Do not make up facts, use outside knowledge, or hallucinate. Be concise and precise.\n\n"
             f"Chat History:\n{history_str}\n"
             f"Document Context:\n{context_str}\n\n"

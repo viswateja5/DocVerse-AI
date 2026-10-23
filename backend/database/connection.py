@@ -1,12 +1,13 @@
 import os
+from pathlib import Path
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import text, String, ForeignKey, DateTime, Text, Integer
 from dotenv import load_dotenv
 
-# Load env configurations
-load_dotenv()
+# Load local backend settings without overriding process environment variables.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
 # postgresql+asyncpg://user:pass@host/db or sqlite+aiosqlite:///vector_store/chat_history.db
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///vector_store/chat_history.db")

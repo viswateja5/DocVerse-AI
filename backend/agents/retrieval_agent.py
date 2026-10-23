@@ -7,7 +7,7 @@ from langchain_community.retrievers import BM25Retriever
 from agents.graph_state import AgentState
 from utils.embeddings import get_embeddings_model
 from utils.faiss_store import load_vector_store
-from utils.search import create_hybrid_retriever
+from utils.search import create_hybrid_retriever, filter_documents_by_ids
 from utils.rerank import rerank_documents
 from utils.query_processor import expand_query, extract_metadata_filters
 
@@ -45,21 +45,44 @@ async def retrieve_documents(state: AgentState) -> dict:
     # 2. Self-Query Metadata extraction
     session_id = state.get("session_id")
     global_search = state.get("global_search", False)
-    
+    user_id = state.get("user_id")
+
     available_filenames = []
+    allowed_document_ids = set()
     try:
         from database.connection import async_session_maker
         from sqlalchemy import select
         from models.db_models import UploadFileModel
         async with async_session_maker() as db:
-            result = await db.execute(
-                select(UploadFileModel.filename).where(
+            authorized_documents_query = select(
+                UploadFileModel.filename, UploadFileModel.document_id
+            ).where(
+                UploadFileModel.user_id == user_id,
+                UploadFileModel.status == "Ready",
+                UploadFileModel.document_id.is_not(None),
+            )
+            if not global_search:
+                authorized_documents_query = authorized_documents_query.where(
                     UploadFileModel.session_id == session_id
                 )
-            )
-            available_filenames = [row[0] for row in result.all()]
+            result = await db.execute(authorized_documents_query)
+            authorized_documents = result.all()
+            available_filenames = [row.filename for row in authorized_documents]
+            allowed_document_ids = {
+                row.document_id for row in authorized_documents if row.document_id
+            }
     except Exception as dbe:
         logger.warning(f"Could not retrieve session filenames from database: {dbe}")
+        reasoning_trace.append(
+            "Could not verify document ownership. Document retrieval was skipped."
+        )
+        return {"documents": [], "reasoning_trace": reasoning_trace}
+
+    if not allowed_document_ids:
+        reasoning_trace.append(
+            "No authorized documents are available for this search."
+        )
+        return {"documents": [], "reasoning_trace": reasoning_trace}
 
     page_filter, doc_filter = extract_metadata_filters(query, available_filenames)
     filter_messages = []
@@ -88,7 +111,9 @@ async def retrieve_documents(state: AgentState) -> dict:
         vector_db = load_vector_store("vector_store", embeddings)
     except Exception as ve:
         logger.error(f"Vector store loading failed: {ve}", exc_info=True)
-        reasoning_trace.append("Vector store is offline or failed to load. Falling back to direct LLM.")
+        reasoning_trace.append(
+            "Vector store is offline or failed to load. No document context is available."
+        )
         return {"documents": [], "reasoning_trace": reasoning_trace}
 
     retrieved_docs = []
@@ -101,9 +126,11 @@ async def retrieve_documents(state: AgentState) -> dict:
             session_id=session_id, 
             global_search=global_search,
             page=page_filter,
-            document_name=doc_filter
+            document_name=doc_filter,
+            allowed_document_ids=allowed_document_ids,
         )
         candidates = await retriever.ainvoke(expanded_query_str)
+        candidates = filter_documents_by_ids(candidates, allowed_document_ids)
         candidates = deduplicate_docs(candidates)
         reasoning_trace.append(f"Level 1: Retrieved {len(candidates)} unique candidates via hybrid EnsembleRetriever.")
         
@@ -132,12 +159,14 @@ async def retrieve_documents(state: AgentState) -> dict:
                 filter_dict["page"] = page_filter
             if doc_filter is not None:
                 filter_dict["document_name"] = doc_filter
+            filter_dict["document_id"] = {"$in": list(allowed_document_ids)}
                 
             if filter_dict:
                 search_kwargs["filter"] = filter_dict
                 
             faiss_retriever = vector_db.as_retriever(search_kwargs=search_kwargs)
             candidates = await faiss_retriever.ainvoke(expanded_query_str)
+            candidates = filter_documents_by_ids(candidates, allowed_document_ids)
             retrieved_docs = deduplicate_docs(candidates)[:top_n]
             reasoning_trace.append(f"Level 3: Retrieved {len(retrieved_docs)} unique chunks using FAISS-only.")
             return {"documents": retrieved_docs, "reasoning_trace": reasoning_trace}
@@ -148,6 +177,9 @@ async def retrieve_documents(state: AgentState) -> dict:
             # --- Level 4: BM25-only fallback ---
             try:
                 all_documents = list(vector_db.docstore._dict.values())
+                all_documents = filter_documents_by_ids(
+                    all_documents, allowed_document_ids
+                )
                 if not global_search and session_id:
                     all_documents = [d for d in all_documents if d.metadata.get("session_id") == session_id]
                 if page_filter is not None:
@@ -163,11 +195,16 @@ async def retrieve_documents(state: AgentState) -> dict:
                     reasoning_trace.append(f"Level 4: Retrieved {len(retrieved_docs)} unique chunks using BM25-only.")
                     return {"documents": retrieved_docs, "reasoning_trace": reasoning_trace}
                 else:
-                    reasoning_trace.append("Level 4 BM25 has no source documents. Defaulting to general LLM.")
+                    reasoning_trace.append(
+                        "Level 4 BM25 has no source documents. No document context is available."
+                    )
                     return {"documents": [], "reasoning_trace": reasoning_trace}
             except Exception as be:
                 logger.error(f"BM25 fallback failed: {be}", exc_info=True)
-                reasoning_trace.append(f"Level 4 BM25-only retrieval failed: {be}. Defaulting to general LLM.")
+                reasoning_trace.append(
+                    f"Level 4 BM25-only retrieval failed: {be}. "
+                    "No document context is available."
+                )
                 
-                # --- Level 5: Fallback to LLM (Empty docs) ---
+                # Return no context so the caller can avoid unsupported synthesis.
                 return {"documents": [], "reasoning_trace": reasoning_trace}

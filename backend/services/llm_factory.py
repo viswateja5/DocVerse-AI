@@ -10,6 +10,13 @@ PROVIDER_API_KEYS = {
     "groq": "GROQ_API_KEY",
 }
 
+DEFAULT_MODELS = {
+    "openai": "gpt-4o-mini",
+    "gemini": "gemini-1.5-flash",
+    "groq": "qwen/qwen3.8-27b",
+    "ollama": "llama3",
+}
+
 _PLACEHOLDER_MARKERS = (
     "your_",
     "your-",
@@ -74,6 +81,16 @@ def validate_llm_configuration() -> bool:
     return True
 
 
+def get_model_name(provider: str) -> str:
+    """Return configured model for the given provider, falling back to defaults."""
+    env_key = f"{provider.upper()}_MODEL"
+    return (
+        get_clean_env_var(env_key)
+        or get_clean_env_var("MODEL_NAME")
+        or DEFAULT_MODELS.get(provider, "")
+    )
+
+
 def get_llm_error_message(error: Exception) -> str:
     """Return a user-safe message for provider failures without echoing credentials."""
     status_code = getattr(error, "status_code", None)
@@ -82,6 +99,13 @@ def get_llm_error_message(error: Exception) -> str:
 
     error_code = str(getattr(error, "code", "")).lower()
     error_type = type(error).__name__.lower()
+    err_str = str(error).lower()
+    provider = os.getenv("MODEL_PROVIDER", "openai").strip().lower()
+    key_name = PROVIDER_API_KEYS.get(provider)
+
+    if key_name and not get_clean_env_var(key_name):
+        return f"The {provider} provider is not configured. Set {key_name} in the backend environment."
+
     is_auth_error = (
         status_code in (401, 403)
         or error_code in ("invalid_api_key", "authentication_error")
@@ -89,8 +113,6 @@ def get_llm_error_message(error: Exception) -> str:
         or "unauthorized" in error_type
     )
 
-    provider = os.getenv("MODEL_PROVIDER", "openai").strip().lower()
-    key_name = PROVIDER_API_KEYS.get(provider)
     if is_auth_error and key_name:
         return (
             f"The {provider} provider rejected its credentials. "
@@ -98,9 +120,43 @@ def get_llm_error_message(error: Exception) -> str:
         )
     if is_auth_error:
         return f"The {provider} provider rejected its credentials."
+
+    is_model_error = (
+        status_code == 404
+        or error_code in ("model_not_found", "resource_not_found")
+        or ("model" in err_str and ("does not exist" in err_str or "not found" in err_str or "access" in err_str))
+        or "not_found" in error_type
+        or "notfound" in error_type
+    )
+    if is_model_error:
+        configured_model = get_model_name(provider) or "configured model"
+        return (
+            f"The configured model '{configured_model}' for {provider} does not exist "
+            "or you do not have access to it. Check your model configuration."
+        )
+
+    if (
+        status_code == 429
+        or error_code in ("rate_limit_exceeded", "too_many_requests")
+        or "ratelimit" in error_type
+        or "rate_limit" in error_type
+    ):
+        return f"The {provider} provider rate limit was reached. Please retry shortly."
+    if (
+        status_code in (408, 504)
+        or "timeout" in error_type
+        or "timed out" in err_str
+    ):
+        return f"The {provider} provider request timed out. Please retry."
+    if (
+        (status_code is not None and status_code >= 500)
+        or "connection" in error_type
+        or "serviceunavailable" in error_type
+    ):
+        return f"The {provider} provider is temporarily unavailable. Please retry later."
     return (
-        "The configured LLM provider could not complete the request. "
-        "Check the backend logs and provider status."
+        f"The {provider} provider could not complete the request. "
+        "Please retry or check the provider status."
     )
 
 def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
@@ -118,7 +174,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
             raise ValueError("No valid OpenAI API key found. Please configure OPENAI_API_KEY.")
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
-            model="gpt-4o-mini", 
+            model=get_model_name("openai"), 
             temperature=temperature, 
             streaming=streaming,
             openai_api_key=openai_key
@@ -131,7 +187,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
         # Lazy import to avoid loading unused packages
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash", 
+            model=get_model_name("gemini"), 
             google_api_key=google_key, 
             temperature=temperature, 
             streaming=streaming
@@ -143,7 +199,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
             raise ValueError("No valid Groq API key found. Please configure GROQ_API_KEY.")
         from langchain_groq import ChatGroq
         return ChatGroq(
-            model="llama-3.3-70b-versatile", 
+            model=get_model_name("groq"), 
             groq_api_key=groq_key, 
             temperature=temperature, 
             streaming=streaming
@@ -153,7 +209,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
         from langchain_community.chat_models import ChatOllama
         ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
         return ChatOllama(
-            model="llama3", 
+            model=get_model_name("ollama"), 
             base_url=ollama_host, 
             temperature=temperature
         )

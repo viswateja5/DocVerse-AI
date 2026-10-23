@@ -19,6 +19,14 @@ async def test_agent_query_router():
     res_rag = await route_query(state_rag)
     assert res_rag["decision"] == "rag"
 
+    state_rag_without_documents = {
+        "query": "Summarize my uploaded document",
+        "document_count": 0,
+        "reasoning_trace": [],
+    }
+    res_rag_without_documents = await route_query(state_rag_without_documents)
+    assert res_rag_without_documents["decision"] == "rag"
+
     # Test web search route
     state_web = {"query": "What is today's stock price of Nvidia?", "reasoning_trace": []}
     res_web = await route_query(state_web)
@@ -141,7 +149,13 @@ async def test_session_isolation_and_global_search(client: AsyncClient, mock_vec
     # To strictly ensure it's there before querying:
     mock_doc = Document(
         page_content="The secret password for project Antigravity is DeepMind2026.",
-        metadata={"session_id": "session_A", "document_name": "antigravity_secret.txt", "page": 0}
+        metadata={
+            "session_id": "session_A",
+            "document_id": docs_a.json()[0]["document_id"],
+            "document_name": "antigravity_secret.txt",
+            "source": "antigravity_secret.txt",
+            "page": 0,
+        }
     )
     save_or_update_vector_store([mock_doc], get_embeddings_model(), mock_vector_store_dir)
     
@@ -171,6 +185,7 @@ async def test_session_isolation_and_global_search(client: AsyncClient, mock_vec
     }
     
     answer_global = ""
+    global_sources = []
     async with client.stream("POST", "/agent/query", json=query_global, headers=headers) as response:
         assert response.status_code == 200
         async for line in response.aiter_lines():
@@ -178,8 +193,54 @@ async def test_session_isolation_and_global_search(client: AsyncClient, mock_vec
                 data = json.loads(line[6:])
                 if data.get("type") == "content":
                     answer_global += data.get("data", "")
+                elif data.get("type") == "sources":
+                    global_sources = data.get("data", [])
                     
     assert "DeepMind2026" in answer_global
+    assert global_sources
+    assert global_sources[0]["file"] == "antigravity_secret.txt"
+    assert global_sources[0]["session_id"] == "session_A"
+    assert global_sources[0]["chunk_id"]
+
+    # A different account cannot retrieve this user's documents through global search.
+    await client.post(
+        "/signup",
+        json={"username": "other_isolation_user", "password": "otherpassword123"},
+    )
+    other_login = await client.post(
+        "/login",
+        data={"username": "other_isolation_user", "password": "otherpassword123"},
+    )
+    other_headers = {
+        "Authorization": f"Bearer {other_login.json()['access_token']}"
+    }
+    other_query = {
+        "question": "What is the secret password for project Antigravity in the uploaded documents?",
+        "session_id": "session_C",
+        "global_search": True,
+    }
+    other_answer = ""
+    async with client.stream(
+        "POST", "/agent/query", json=other_query, headers=other_headers
+    ) as response:
+        assert response.status_code == 200
+        async for line in response.aiter_lines():
+            if line.startswith("data: "):
+                data = json.loads(line[6:])
+                if data.get("type") == "content":
+                    other_answer += data.get("data", "")
+
+    assert "DeepMind2026" not in other_answer
+
+    forbidden_session_query = {
+        "question": "Summarize my uploaded documents",
+        "session_id": "session_B",
+        "global_search": True,
+    }
+    forbidden_response = await client.post(
+        "/agent/query", json=forbidden_session_query, headers=other_headers
+    )
+    assert forbidden_response.status_code == 404
     
     # 6. Delete document and verify it is removed from list and retrieval
     doc_id = docs_a.json()[0]["document_id"]

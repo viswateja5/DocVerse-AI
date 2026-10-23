@@ -71,11 +71,10 @@ def load_vector_store(
     pkl_file = os.path.join(store_path, f"{index_name}.pkl")
     
     if not (os.path.exists(faiss_file) and os.path.exists(pkl_file)):
-        from langchain_core.documents import Document
-        db = FAISS.from_documents([Document(page_content="Initialization")], embeddings)
-        db.save_local(store_path, index_name=index_name)
-        _cached_vector_store = db
-        return db
+        raise FileNotFoundError(
+            f"FAISS index '{index_name}' was not found in '{store_path}'. "
+            "Upload documents or rebuild the local vector store before querying."
+        )
         
     db = FAISS.load_local(
         store_path, 

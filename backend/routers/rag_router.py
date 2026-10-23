@@ -94,7 +94,8 @@ async def get_document_status(
 async def query_documents(
     request: Request,  # Required by slowapi
     body: QueryRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Streams RAG answers token-by-token using Server-Sent Events.
@@ -102,12 +103,14 @@ async def query_documents(
     - JWT authentication
     - Rate limiting (20 requests/minute)
     """
+    await rag_engine.validate_session_access(db, body.session_id, current_user.id)
     return StreamingResponse(
         rag_engine.query_rag_stream(
             query=body.question,
             session_id=body.session_id,
             user_id=current_user.id,
-            session_maker=async_session_maker
+            session_maker=async_session_maker,
+            global_search=body.global_search,
         ),
         media_type="text/event-stream"
     )

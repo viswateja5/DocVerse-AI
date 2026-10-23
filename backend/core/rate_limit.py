@@ -3,5 +3,8 @@ import os
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-# Disable rate limiting for seamless developer ingestion
-limiter = Limiter(key_func=get_remote_address, enabled=False)
+limiter = Limiter(
+    key_func=get_remote_address,
+    enabled=os.getenv("RATE_LIMIT_ENABLED", "true").lower()
+    not in ("0", "false", "no", "off"),
+)

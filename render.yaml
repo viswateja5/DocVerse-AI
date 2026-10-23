@@ -7,6 +7,8 @@ services:
     envVars:
       - key: MODEL_PROVIDER
         value: groq
+      - key: GROQ_MODEL
+        value: qwen/qwen3.8-27b
       - key: GROQ_API_KEY
         sync: false
       - key: OPENAI_API_KEY

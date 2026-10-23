@@ -13,15 +13,25 @@ def extract_pdf_page_content(pdf_path: str, page_num: int) -> Document:
     return Document(page_content=text, metadata={"source": pdf_path, "page": page_num})
 
 def load_pdf_parallel(file_path: str) -> List[Document]:
-    reader = pypdf.PdfReader(file_path)
+    try:
+        reader = pypdf.PdfReader(file_path)
+    except Exception as e:
+        raise ValueError(f"Failed to read PDF document: {str(e)}") from e
+
     num_pages = len(reader.pages)
+    if num_pages == 0:
+        raise ValueError("PDF contains no pages.")
     
-    with ThreadPoolExecutor(max_workers=min(32, num_pages or 1)) as executor:
+    with ThreadPoolExecutor(max_workers=min(32, num_pages)) as executor:
         futures = [
             executor.submit(extract_pdf_page_content, file_path, i)
             for i in range(num_pages)
         ]
         documents = [f.result() for f in futures]
+
+    if not documents or not any(doc.page_content.strip() for doc in documents):
+        raise ValueError("Document appears to be empty or contains no extractable text.")
+
     return documents
 
 def load_document(file_path: str) -> List[Document]:
@@ -41,6 +51,8 @@ def load_document(file_path: str) -> List[Document]:
     """
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Document file not found at: {file_path}")
+    if os.path.getsize(file_path) == 0:
+        raise ValueError("Document appears to be empty or contains no extractable text.")
         
     ext = os.path.splitext(file_path)[1].lower()
     

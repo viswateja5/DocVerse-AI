@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const configuredApiBase = import.meta.env.VITE_API_URL;
 const defaultApiBase = import.meta.env.DEV
-  ? "http://localhost:8000"
+  ? "http://127.0.0.1:8000"
   : "https://docverse-ai.onrender.com";
 const API_BASE = (
   configuredApiBase?.replace(
@@ -654,7 +654,16 @@ export const queryStream = async (
     });
     
     if (!response.ok) {
-      const error = new Error(`Remote query failed: HTTP ${response.status}`);
+      let detail = `Remote query failed: HTTP ${response.status}`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson && errorJson.detail) {
+          detail = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+        }
+      } catch (e) {
+        // response was not JSON
+      }
+      const error = new Error(detail);
       error.status = response.status;
       throw error;
     }

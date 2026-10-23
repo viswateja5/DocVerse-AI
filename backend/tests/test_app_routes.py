@@ -5,6 +5,7 @@ import pytest
 from httpx import AsyncClient
 
 from app import app
+from core.rate_limit import limiter
 from database.connection import get_db
 
 
@@ -38,6 +39,10 @@ async def test_openapi_registers_expected_application_routes(client: AsyncClient
         "/edu/generate",
     ):
         assert path in paths
+
+
+def test_rate_limits_are_enabled_by_default():
+    assert limiter.enabled is True
 
 
 @pytest.mark.asyncio
@@ -172,3 +177,54 @@ async def test_chatbot_endpoint_rejects_missing_jwt(client: AsyncClient):
     )
 
     assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_web_query_without_search_results_does_not_call_llm(
+    client: AsyncClient, monkeypatch
+):
+    await client.post(
+        "/signup",
+        json={"username": "route_web_user", "password": "chatpassword123"},
+    )
+    login = await client.post(
+        "/login",
+        data={"username": "route_web_user", "password": "chatpassword123"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    monkeypatch.setattr("routers.agent_router.get_cached", AsyncMock(return_value=None))
+    monkeypatch.setattr("routers.agent_router.set_cached", AsyncMock())
+    monkeypatch.setattr(
+        "routers.agent_router.route_query",
+        AsyncMock(
+            return_value={
+                "decision": "web",
+                "intent": "real_time",
+                "query_type": "fact",
+                "reasoning_trace": [],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        "routers.agent_router.search_web_agent",
+        AsyncMock(return_value={"web_results": [], "reasoning_trace": []}),
+    )
+    monkeypatch.setattr(
+        "routers.agent_router.get_llm",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("LLM must not run")),
+    )
+
+    async with client.stream(
+        "POST",
+        "/agent/query",
+        json={
+            "question": "What is the current weather?",
+            "session_id": "route-web-session",
+        },
+        headers=headers,
+    ) as response:
+        body = (await response.aread()).decode()
+
+    assert response.status_code == 200
+    assert "Live web search returned no results or is unavailable." in body
+    assert "LLM must not run" not in body

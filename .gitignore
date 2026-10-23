@@ -1,5 +1,7 @@
 # Python virtual env, bytecodes and pytest cache
 venv/
+.venv/
+*/.venv/
 __pycache__/
 *.pyc
 .pytest_cache/

@@ -69,7 +69,10 @@ async def route_query(state: AgentState) -> dict:
         }
 
     # Heuristic pre-routing check for common real-time keywords to guarantee 105% correct routing
-    has_doc_reference = any(w in clean_query for w in ["pdf", "document", "uploaded", "file", "paper", "doc", "text"])
+    has_doc_reference = any(
+        re.search(rf"\b{term}\b", clean_query)
+        for term in ("pdf", "document", "uploaded", "file", "paper", "attachment")
+    )
     
     real_time_patterns = [
         r"\blatest\b", r"\bnewest\b", r"\bcurrent\b", r"\brecent\b", r"\brelease\b", r"\bversion\b", r"\bupdate\b",
@@ -92,19 +95,66 @@ async def route_query(state: AgentState) -> dict:
             ]
         }
 
+    # Fast path: If no documents are uploaded, questions without document keywords are general knowledge
+    if doc_count == 0:
+        if has_doc_reference:
+            logger.info("Router fast-path: 0 documents uploaded but document requested -> intent='document', decision='rag'")
+            return {
+                "intent": "document",
+                "decision": "rag",
+                "query_type": "fact",
+                "reasoning_trace": state.get("reasoning_trace", []) + [
+                    "User asked about uploaded documents, but 0 documents are uploaded in active session."
+                ]
+            }
+        else:
+            logger.info("Router fast-path: 0 documents uploaded -> intent='general_knowledge', decision='llm'")
+            return {
+                "intent": "general_knowledge",
+                "decision": "llm",
+                "query_type": "fact",
+                "reasoning_trace": state.get("reasoning_trace", []) + [
+                    "No documents uploaded in active session. Routed directly to LLM for general knowledge."
+                ]
+            }
+
+    # Fast path: Explicit document reference when documents are present
+    if has_doc_reference and doc_count > 0:
+        logger.info("Router fast-path: explicit document reference with uploaded documents -> intent='document', decision='rag'")
+        return {
+            "intent": "document",
+            "decision": "rag",
+            "query_type": "fact",
+            "reasoning_trace": state.get("reasoning_trace", []) + [
+                "Document reference detected with active documents available. Routed to RAG."
+            ]
+        }
+
     # Get current date context to help model identify temporal references
     from datetime import datetime
     current_date_str = datetime.now().strftime("%Y-%m-%d")
 
+    # Include recent conversation context if available to resolve follow-ups
+    history_context = ""
+    messages = state.get("messages", [])
+    if messages:
+        recent_lines = [
+            f"{m.get('role', 'user')}: {m.get('content', '')}"
+            for m in messages[-4:]
+        ]
+        history_context = "\nRecent Conversation History:\n" + "\n".join(recent_lines) + "\n"
+
     system_prompt = (
         "You are an expert query routing agent.\n"
         f"The current date is {current_date_str}.\n"
+        f"Active documents uploaded: {doc_count}\n"
+        f"{history_context}\n"
         "Your task is to analyze the user's query and classify it into one of six query intent categories:\n"
         "1. 'greeting': Friendly hello, morning wishes, thank you, goodbye, or asking what the assistant can do.\n"
         "2. 'casual': Small talk, chit-chat, telling a joke, or light banter.\n"
-        "3. 'document': The query asks specifically about uploaded files, documents, user papers, or details expected to be in the database context.\n"
-        "4. 'real_time': The query asks about real-time events, current news, today's stock prices, sports scores, weather, product prices, or technology/product releases/updates (like recent iPhone models, software versions, or recent specs) that require a live web search to be up-to-date.\n"
-        "5. 'general_knowledge': The query asks for general knowledge, coding, programming explanations, recipes, math calculations, or generic logic.\n"
+        "3. 'document': The query asks specifically about uploaded files, documents, user papers, or details expected to be in the uploaded document context, OR is a follow-up question regarding previously discussed document topics.\n"
+        "4. 'real_time': The query asks about real-time events, current news, today's stock prices, sports scores, weather, product prices, or technology/product releases/updates that require a live web search to be up-to-date.\n"
+        "5. 'general_knowledge': The query asks for general knowledge, coding, programming explanations, recipes, math calculations, or generic logic independent of uploaded files.\n"
         "6. 'reasoning': The query requires multi-step analysis, logical reasoning, or combining both document context and live web search.\n\n"
         "Based on the intent, map it to one of four routing decisions:\n"
         "- 'rag': For 'document' intent.\n"
@@ -150,11 +200,16 @@ async def route_query(state: AgentState) -> dict:
                 query_type = match_type.group(1).lower().strip()
             reasoning_trace.append(f"Text-parsed router intent: '{intent}' / decision: '{decision}' / type: '{query_type}'")
     except Exception as e:
-        intent = "general_knowledge"
-        decision = "llm"
+        if has_doc_reference:
+            intent = "document"
+            decision = "rag"
+        else:
+            intent = "general_knowledge"
+            decision = "llm"
         query_type = "fact"
         reasoning_trace.append(
-            f"Routing failed: {get_llm_error_message(e)} Defaulted to 'llm'."
+            f"Routing failed: {get_llm_error_message(e)} "
+            f"Defaulted to '{decision}'."
         )
 
     # Clamp decision/intent to valid options
@@ -167,10 +222,7 @@ async def route_query(state: AgentState) -> dict:
         
     # Overwrite decision to bypass RAG if no documents are uploaded in the system
     if doc_count == 0:
-        if decision == "rag":
-            decision = "llm"
-            reasoning_trace.append("Overrode decision 'rag' -> 'llm' because active session has 0 documents.")
-        elif decision == "hybrid":
+        if decision == "hybrid":
             decision = "web"
             reasoning_trace.append("Overrode decision 'hybrid' -> 'web' because active session has 0 documents.")
 

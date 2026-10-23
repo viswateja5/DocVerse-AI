@@ -1,13 +1,25 @@
 from typing import List, Optional
 from langchain_core.documents import Document
 
+def filter_documents_by_ids(
+    documents: List[Document],
+    allowed_document_ids: set[str],
+) -> List[Document]:
+    return [
+        document
+        for document in documents
+        if document.metadata.get("document_id") in allowed_document_ids
+    ]
+
+
 def create_hybrid_retriever(
     db,
     top_k: int = 10,
     session_id: Optional[str] = None,
     global_search: bool = False,
     page: Optional[int] = None,
-    document_name: Optional[str] = None
+    document_name: Optional[str] = None,
+    allowed_document_ids: Optional[set[str]] = None,
 ):
     """
     Creates an EnsembleRetriever combining BM25 (sparse keyword search) 
@@ -19,6 +31,9 @@ def create_hybrid_retriever(
     from langchain_community.retrievers import BM25Retriever
     from langchain_classic.retrievers import EnsembleRetriever
     all_documents = list(db.docstore._dict.values())
+
+    if allowed_document_ids is not None:
+        all_documents = filter_documents_by_ids(all_documents, allowed_document_ids)
     
     # Apply filtering constraints to the lexical document list (BM25)
     if not global_search and session_id:
@@ -53,6 +68,8 @@ def create_hybrid_retriever(
         filter_dict["page"] = page
     if document_name is not None:
         filter_dict["document_name"] = document_name
+    if allowed_document_ids is not None:
+        filter_dict["document_id"] = {"$in": list(allowed_document_ids)}
         
     if filter_dict:
         search_kwargs["filter"] = filter_dict

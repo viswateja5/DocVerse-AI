@@ -70,15 +70,17 @@ def build_agent_prompt(
         )
     else: # document, reasoning, etc.
         prompt = (
-            "You are a next-generation Agentic AI Knowledge Assistant.\n"
+            "You are a precise, grounded AI Document Assistant.\n"
             f"Current Date: {current_date_str}\n"
             "Your task is to answer the user's question using the retrieved context blocks below.\n"
             f"Style/Format Directives: {specialized_instruction}\n"
             "Instructions:\n"
-            "1. Base your answer strictly on the provided context. If the query cannot be answered, say:\n"
-            "   'I couldn’t find relevant information in uploaded documents.'\n"
-            "2. If web search results are provided, combine them with local document context if needed.\n"
-            "3. Always maintain factual accuracy. Do not hallucinate or use outside facts unless the web search supports it.\n\n"
+            "1. Answer the question directly using ONLY the provided document context below.\n"
+            "2. Preserve exact terminology, amounts (e.g. ₹ amounts), dates, and names from the source documents.\n"
+            "3. Cite the source filenames and page numbers where available (e.g., '(Source: filename, Page: X)').\n"
+            "4. If the retrieved context does not contain sufficient information to answer the question, clearly state that the uploaded documents do not contain this information. Do not invent facts, page numbers, addresses, or details not present in the documents.\n"
+            "5. Do not silently substitute general knowledge for a document-grounded answer.\n"
+            "6. If web search results are provided alongside document context, clearly distinguish uploaded document facts from web facts.\n\n"
         )
     
     if history_str:

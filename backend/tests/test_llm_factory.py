@@ -14,6 +14,7 @@ from routers.agent_router import stream_agent_reasoning
 def test_uses_selected_groq_provider_and_its_key(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "groq")
     monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    monkeypatch.delenv("GROQ_MODEL", raising=False)
 
     with patch.dict(
         sys.modules,
@@ -23,11 +24,41 @@ def test_uses_selected_groq_provider_and_its_key(monkeypatch):
 
     assert isinstance(llm, MockChatGroq)
     assert llm.options == {
-        "model": "llama-3.3-70b-versatile",
+        "model": "qwen/qwen3.8-27b",
         "temperature": 0.2,
         "streaming": True,
         "groq_api_key": "test-groq-key",
     }
+
+
+def test_uses_custom_groq_model_from_env(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setenv("GROQ_MODEL", "custom-model-id")
+
+    with patch.dict(
+        sys.modules,
+        {"langchain_groq": SimpleNamespace(ChatGroq=MockChatGroq)},
+    ):
+        llm = original_get_llm(streaming=False, temperature=0.0)
+
+    assert isinstance(llm, MockChatGroq)
+    assert llm.options["model"] == "custom-model-id"
+
+
+def test_model_not_found_error_is_actionable(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+
+    class ModelNotFoundError(Exception):
+        status_code = 404
+
+    message = llm_factory.get_llm_error_message(
+        ModelNotFoundError("The model does not exist or you do not have access to it.")
+    )
+
+    assert "does not exist or you do not have access to it" in message
+    assert "groq" in message
 
 
 class MockChatGroq:
@@ -91,6 +122,7 @@ def test_startup_validation_warns_without_logging_key(monkeypatch, caplog):
 
 def test_invalid_credential_error_is_actionable_and_redacted(monkeypatch):
     monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
 
     class AuthenticationError(Exception):
         status_code = 401
@@ -101,6 +133,31 @@ def test_invalid_credential_error_is_actionable_and_redacted(monkeypatch):
 
     assert "GROQ_API_KEY" in message
     assert "not-a-real-secret" not in message
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (type("RateLimitError", (Exception,), {"status_code": 429})(), "rate limit"),
+        (TimeoutError("request timed out"), "timed out"),
+        (type("ServiceUnavailableError", (Exception,), {"status_code": 503})(), "unavailable"),
+    ],
+)
+def test_provider_failures_have_actionable_messages(monkeypatch, error, expected):
+    monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+
+    assert expected in llm_factory.get_llm_error_message(error).lower()
+
+
+def test_missing_provider_key_error_names_configuration(monkeypatch):
+    monkeypatch.setenv("MODEL_PROVIDER", "groq")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    message = llm_factory.get_llm_error_message(RuntimeError("provider request failed"))
+
+    assert "GROQ_API_KEY" in message
+    assert "not configured" in message
 
 
 @pytest.mark.asyncio

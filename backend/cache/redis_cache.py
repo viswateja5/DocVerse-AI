@@ -1,13 +1,14 @@
 import os
 import json
 import logging
+from pathlib import Path
 from typing import Optional, Any, Dict
 import redis.asyncio as aioredis
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 logger = logging.getLogger("rag-backend")
 
 redis_client: Optional[aioredis.Redis] = None
