@@ -13,6 +13,7 @@ from agents.retrieval_agent import retrieve_documents
 from agents.web_search_agent import search_web_agent
 from agents.reasoning_agent import build_agent_prompt, get_llm
 from services.rag_engine import get_or_create_session
+from services.llm_factory import get_llm_error_message
 from cache.redis_cache import get_cached, set_cached
 
 logger = logging.getLogger("rag-backend")
@@ -206,48 +207,12 @@ async def stream_agent_reasoning(
                     answer_text += token
                     yield f"data: {json.dumps({'type': 'content', 'data': token})}\n\n"
         except Exception as e:
-            logger.warning(f"Streaming failed: {e}. Falling back to alternative model...")
-            try:
-                from services.llm_factory import get_clean_env_var
-                groq_key = get_clean_env_var("GROQ_API_KEY")
-                google_key = get_clean_env_var("GOOGLE_API_KEY")
-                openai_key = get_clean_env_var("OPENAI_API_KEY")
-                
-                if groq_key:
-                    from langchain_groq import ChatGroq
-                    fallback_llm = ChatGroq(
-                        model="llama-3.1-8b-instant", 
-                        groq_api_key=groq_key, 
-                        temperature=0.0,
-                        streaming=True
-                    )
-                elif google_key:
-                    from langchain_google_genai import ChatGoogleGenerativeAI
-                    fallback_llm = ChatGoogleGenerativeAI(
-                        model="gemini-1.5-flash",
-                        google_api_key=google_key,
-                        temperature=0.0,
-                        streaming=True
-                    )
-                elif openai_key:
-                    from langchain_openai import ChatOpenAI
-                    fallback_llm = ChatOpenAI(
-                        model="gpt-4o-mini",
-                        openai_api_key=openai_key,
-                        temperature=0.0,
-                        streaming=True
-                    )
-                else:
-                    raise ValueError("No valid API keys configured for fallback.")
-                async for chunk in fallback_llm.astream(prompt):
-                    token = chunk.content
-                    if token:
-                        answer_text += token
-                        yield f"data: {json.dumps({'type': 'content', 'data': token})}\n\n"
-            except Exception as fe:
-                logger.error(f"Streaming fallback model failed: {fe}")
-                yield f"data: {json.dumps({'type': 'content', 'data': f'[Error: {str(fe)}]'})}\n\n"
-                answer_text += f"[Error: {str(fe)}]"
+            error_message = get_llm_error_message(e)
+            logger.error("LLM streaming failed (%s).", type(e).__name__)
+            answer_text = f"[Generation Error: {error_message}]"
+            yield (
+                f"data: {json.dumps({'type': 'content', 'data': answer_text})}\n\n"
+            )
             
         # Log assistant message
         async with async_session_maker() as db:
@@ -287,7 +252,8 @@ async def stream_agent_reasoning(
             "confidence_score": confidence_score,
             "answer": answer_text
         }
-        await set_cached(cache_key, cache_data, expire_seconds=3600)
+        if not answer_text.startswith("[Generation Error:"):
+            await set_cached(cache_key, cache_data, expire_seconds=3600)
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
         
     return StreamingResponse(sse_generator(), media_type="text/event-stream")

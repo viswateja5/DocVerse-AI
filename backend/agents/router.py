@@ -1,7 +1,7 @@
 import re
 import logging
 from pydantic import BaseModel, Field
-from services.llm_factory import get_llm
+from services.llm_factory import get_llm, get_llm_error_message
 from agents.graph_state import AgentState
 
 logger = logging.getLogger("rag-backend")
@@ -153,7 +153,9 @@ async def route_query(state: AgentState) -> dict:
         intent = "general_knowledge"
         decision = "llm"
         query_type = "fact"
-        reasoning_trace.append(f"Routing failed with error: {str(e)}. Defaulted to 'llm' fallback.")
+        reasoning_trace.append(
+            f"Routing failed: {get_llm_error_message(e)} Defaulted to 'llm'."
+        )
 
     # Clamp decision/intent to valid options
     if intent not in ["greeting", "casual", "document", "real_time", "general_knowledge", "reasoning"]:

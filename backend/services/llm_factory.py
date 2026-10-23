@@ -1,18 +1,107 @@
 import os
+import logging
 from typing import Any
+
+logger = logging.getLogger("rag-backend")
+
+PROVIDER_API_KEYS = {
+    "openai": "OPENAI_API_KEY",
+    "gemini": "GOOGLE_API_KEY",
+    "groq": "GROQ_API_KEY",
+}
+
+_PLACEHOLDER_MARKERS = (
+    "your_",
+    "your-",
+    "placeholder",
+    "example",
+    "insert_",
+    "enter_",
+    "replace_me",
+    "replace-me",
+    "replace ",
+    "changeme",
+    "change_me",
+    "change ",
+    "<",
+    ">",
+)
+
+
+def _is_placeholder(value: str) -> bool:
+    normalized = value.strip().lower()
+    return (
+        normalized in ("", "undefined", "null", "none")
+        or any(marker in normalized for marker in _PLACEHOLDER_MARKERS)
+    )
+
 
 def get_clean_env_var(name: str) -> str:
     """
-    Retrieves environment variable and returns empty string if value is
-    unset, empty, or literally "undefined", "null", or "none".
+    Return a configured value, or an empty string for unset or placeholder values.
     """
-    val = os.getenv(name)
-    if not val:
+    value = os.getenv(name, "").strip()
+    if _is_placeholder(value):
         return ""
-    val_clean = val.strip().lower()
-    if val_clean in ("", "undefined", "null", "none"):
-        return ""
-    return val
+    return value
+
+
+def validate_llm_configuration() -> bool:
+    """Log whether the selected provider has a usable credential without exposing it."""
+    provider = os.getenv("MODEL_PROVIDER", "openai").strip().lower()
+    if provider == "ollama":
+        logger.info("LLM startup validation passed for provider 'ollama'.")
+        return True
+
+    key_name = PROVIDER_API_KEYS.get(provider)
+    if key_name is None:
+        logger.error(
+            "LLM startup validation failed: unsupported MODEL_PROVIDER '%s'.",
+            provider,
+        )
+        return False
+
+    if not get_clean_env_var(key_name):
+        logger.warning(
+            "LLM startup validation failed: %s is missing or contains a placeholder "
+            "for MODEL_PROVIDER=%s.",
+            key_name,
+            provider,
+        )
+        return False
+
+    logger.info("LLM startup validation passed for provider '%s'.", provider)
+    return True
+
+
+def get_llm_error_message(error: Exception) -> str:
+    """Return a user-safe message for provider failures without echoing credentials."""
+    status_code = getattr(error, "status_code", None)
+    if status_code is None:
+        status_code = getattr(getattr(error, "response", None), "status_code", None)
+
+    error_code = str(getattr(error, "code", "")).lower()
+    error_type = type(error).__name__.lower()
+    is_auth_error = (
+        status_code in (401, 403)
+        or error_code in ("invalid_api_key", "authentication_error")
+        or "authentication" in error_type
+        or "unauthorized" in error_type
+    )
+
+    provider = os.getenv("MODEL_PROVIDER", "openai").strip().lower()
+    key_name = PROVIDER_API_KEYS.get(provider)
+    if is_auth_error and key_name:
+        return (
+            f"The {provider} provider rejected its credentials. "
+            f"Check the {key_name} setting."
+        )
+    if is_auth_error:
+        return f"The {provider} provider rejected its credentials."
+    return (
+        "The configured LLM provider could not complete the request. "
+        "Check the backend logs and provider status."
+    )
 
 def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
     """
@@ -21,30 +110,10 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
     
     Supported values: 'openai', 'gemini', 'groq', 'ollama'
     """
-    provider = os.getenv("MODEL_PROVIDER", "openai").lower()
-    
-    openai_key = get_clean_env_var("OPENAI_API_KEY")
-    google_key = get_clean_env_var("GOOGLE_API_KEY")
-    groq_key = get_clean_env_var("GROQ_API_KEY")
-    
-    # Auto-fallback detection if the chosen provider's key is not set
-    if provider == "openai" and not openai_key:
-        if google_key:
-            provider = "gemini"
-        elif groq_key:
-            provider = "groq"
-    elif provider == "gemini" and not google_key:
-        if openai_key:
-            provider = "openai"
-        elif groq_key:
-            provider = "groq"
-    elif provider == "groq" and not groq_key:
-        if openai_key:
-            provider = "openai"
-        elif google_key:
-            provider = "gemini"
+    provider = os.getenv("MODEL_PROVIDER", "openai").strip().lower()
     
     if provider == "openai":
+        openai_key = get_clean_env_var("OPENAI_API_KEY")
         if not openai_key:
             raise ValueError("No valid OpenAI API key found. Please configure OPENAI_API_KEY.")
         from langchain_openai import ChatOpenAI
@@ -56,6 +125,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
         )
         
     elif provider == "gemini":
+        google_key = get_clean_env_var("GOOGLE_API_KEY")
         if not google_key:
             raise ValueError("No valid Gemini API key found. Please configure GOOGLE_API_KEY.")
         # Lazy import to avoid loading unused packages
@@ -68,6 +138,7 @@ def get_llm(streaming: bool = True, temperature: float = 0.0) -> Any:
         )
         
     elif provider == "groq":
+        groq_key = get_clean_env_var("GROQ_API_KEY")
         if not groq_key:
             raise ValueError("No valid Groq API key found. Please configure GROQ_API_KEY.")
         from langchain_groq import ChatGroq

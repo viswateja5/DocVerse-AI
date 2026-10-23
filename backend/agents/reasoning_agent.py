@@ -4,7 +4,7 @@ from langchain_core.documents import Document
 
 # Local imports
 from agents.graph_state import AgentState
-from services.llm_factory import get_llm
+from services.llm_factory import get_llm, get_llm_error_message
 from utils.context_compressor import compress_context
 
 logger = logging.getLogger("rag-backend")
@@ -231,43 +231,10 @@ async def synthesize_reasoning(state: AgentState) -> dict:
         answer = res.content
         reasoning_trace.append("Final answer synthesized successfully.")
     except Exception as e:
-        logger.warning(f"Default model synthesis failed: {e}. Executing fallback model...")
-        try:
-            from services.llm_factory import get_clean_env_var
-            groq_key = get_clean_env_var("GROQ_API_KEY")
-            google_key = get_clean_env_var("GOOGLE_API_KEY")
-            openai_key = get_clean_env_var("OPENAI_API_KEY")
-            
-            if groq_key:
-                from langchain_groq import ChatGroq
-                fallback_llm = ChatGroq(
-                    model="llama-3.1-8b-instant", 
-                    groq_api_key=groq_key, 
-                    temperature=0.0
-                )
-            elif google_key:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                fallback_llm = ChatGoogleGenerativeAI(
-                    model="gemini-1.5-flash",
-                    google_api_key=google_key,
-                    temperature=0.0
-                )
-            elif openai_key:
-                from langchain_openai import ChatOpenAI
-                fallback_llm = ChatOpenAI(
-                    model="gpt-4o-mini",
-                    openai_api_key=openai_key,
-                    temperature=0.0
-                )
-            else:
-                raise ValueError("No valid API keys configured for fallback.")
-            res = await fallback_llm.ainvoke(prompt)
-            answer = res.content
-            reasoning_trace.append("Final answer synthesized using fallback model.")
-        except Exception as fe:
-            logger.error(f"Reasoning synthesis fallback model failed: {fe}", exc_info=True)
-            answer = f"Error during synthesis: {str(fe)}"
-            reasoning_trace.append(f"LLM synthesis failed: {str(fe)}")
+        error_message = get_llm_error_message(e)
+        logger.error("LLM synthesis failed (%s).", type(e).__name__)
+        answer = f"Generation Error: {error_message}"
+        reasoning_trace.append("LLM synthesis failed; check the configured provider credentials.")
         
     return {
         "answer": answer,

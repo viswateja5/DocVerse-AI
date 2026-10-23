@@ -11,14 +11,18 @@ async def test_agent_query_router():
     Tests query classification node.
     """
     # Test doc RAG route
-    state_rag = {"query": "Summarize the uploaded file context", "reasoning_trace": []}
+    state_rag = {
+        "query": "Summarize the uploaded file context",
+        "document_count": 1,
+        "reasoning_trace": [],
+    }
     res_rag = await route_query(state_rag)
-    assert res_rag["decision"] in ["rag", "llm", "hybrid"]
+    assert res_rag["decision"] == "rag"
 
     # Test web search route
     state_web = {"query": "What is today's stock price of Nvidia?", "reasoning_trace": []}
     res_web = await route_query(state_web)
-    assert res_web["decision"] in ["web", "hybrid", "llm"]
+    assert res_web["decision"] == "web"
 
 @pytest.mark.asyncio
 async def test_graph_rag_construction():

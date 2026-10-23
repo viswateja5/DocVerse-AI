@@ -21,7 +21,7 @@ from utils.embeddings import get_embeddings_model
 from utils.faiss_store import save_or_update_vector_store, load_vector_store
 from utils.search import create_hybrid_retriever
 from utils.rerank import rerank_documents
-from services.llm_factory import get_llm
+from services.llm_factory import get_llm, get_llm_error_message
 from services.web_search import search_tavily
 from cache.redis_cache import get_cached, set_cached
 
@@ -379,6 +379,7 @@ async def query_rag_stream(
 
         # 6. Stream tokens
         answer_text = ""
+        generation_succeeded = True
         try:
             llm = get_llm(streaming=True)
             # astream works for OpenAI, Groq, and Gemini
@@ -388,9 +389,12 @@ async def query_rag_stream(
                     answer_text += token
                     yield json.dumps({"type": "content", "data": token}) + "\n"
         except Exception as e:
-            logger.error(f"Streaming token generation failed: {e}", exc_info=True)
-            yield json.dumps({"type": "content", "data": f"\n[Generation Error: {str(e)}]"}) + "\n"
-            answer_text += f"\n[Generation Error: {str(e)}]"
+            generation_succeeded = False
+            error_message = get_llm_error_message(e)
+            logger.error("Streaming token generation failed (%s).", type(e).__name__)
+            error_text = f"\n[Generation Error: {error_message}]"
+            yield json.dumps({"type": "content", "data": error_text}) + "\n"
+            answer_text += error_text
             
         yield json.dumps({"type": "done"}) + "\n"
 
@@ -405,7 +409,8 @@ async def query_rag_stream(
             "answer": answer_text,
             "sources": sources_list
         }
-        await set_cached(cache_key, cache_data, expire_seconds=3600)
+        if generation_succeeded:
+            await set_cached(cache_key, cache_data, expire_seconds=3600)
 
 async def get_db_stats(db: AsyncSession) -> Dict[str, Any]:
     """

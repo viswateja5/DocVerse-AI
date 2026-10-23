@@ -1,10 +1,16 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
+
 import bcrypt
 if not hasattr(bcrypt, "__about__"):
     class DummyAbout:
         __version__ = getattr(bcrypt, "__version__", "4.0.1")
     bcrypt.__about__ = DummyAbout()
 
-import os
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, Response, status
@@ -21,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.connection import init_db, get_db
 from core.rate_limit import limiter
 from middleware.monitor_middleware import MonitorMiddleware
-from cache.redis_cache import init_redis, redis_client
+from cache import redis_cache
 from routers.auth import auth_router
 from routers.rag_router import rag_router
 from routers.admin_router import admin_router
@@ -30,6 +36,7 @@ from routers.voice_router import voice_router
 from routers.edu_router import edu_router
 from routers.export_router import export_router
 from schemas.api_schemas import HealthResponse
+from services.llm_factory import validate_llm_configuration
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +51,7 @@ async def lifespan(app: FastAPI):
     Handles startup database initializations and cache connectivity configurations.
     """
     logger.info("Initializing Enterprise AI Document Assistant backend...")
+    validate_llm_configuration()
     
     async def startup_tasks():
         try:
@@ -53,7 +61,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"Database initialization failed in background: {e}")
             
         try:
-            await init_redis()
+            await redis_cache.init_redis()
         except Exception as e:
             logger.error(f"Redis initialization failed in background: {e}")
 
@@ -99,6 +107,14 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Configure custom Prometheus MonitorMiddleware
 app.add_middleware(MonitorMiddleware)
 
+# Basic liveness response; intentionally does not touch databases, caches, or ML models.
+@app.get("/")
+async def root():
+    return {
+        "application": "DocVerse AI",
+        "status": "API is running",
+    }
+
 # Custom Rate Limit Exceeded Exception Handler
 @app.exception_handler(RateLimitExceeded)
 async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
@@ -129,18 +145,15 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         logger.error(f"Database health check failed: {e}")
         
     redis_connected = False
-    if redis_client:
+    if redis_cache.redis_client:
         try:
-            await redis_client.ping()
+            await redis_cache.redis_client.ping()
             redis_connected = True
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             
-    # Gather active models provider config list
-    provider = os.getenv("MODEL_PROVIDER", "openai")
-    
     return HealthResponse(
-        status="healthy" if db_connected else "degraded",
+        status="healthy" if db_connected and redis_connected else "degraded",
         database_connected=db_connected,
         redis_connected=redis_connected,
         supported_models=["openai", "gemini", "groq", "ollama"]

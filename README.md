@@ -79,14 +79,50 @@ graph TD
    ```bash
    pip install -r requirements.txt
    ```
-4. Configure environment variables (copy `.env.example` to `.env`):
+4. Configure environment variables (copy `.env.example` to `.env` and replace the
+   `GROQ_API_KEY` placeholder with a key from [Groq Console](https://console.groq.com/keys)):
    ```bash
    cp .env.example .env
    ```
+   `MODEL_PROVIDER=groq` is the existing deployment choice. For Render, set
+   `MODEL_PROVIDER` to `groq` and add the real key as `GROQ_API_KEY` in the
+   service's Environment settings. Never put a real key in `.env.example` or commit it.
 5. Launch the backend server:
    ```bash
    PYTHONPATH=. uvicorn app:app --port 8000 --reload
    ```
+   The frontend uses `http://localhost:8000` in development and
+   `https://docverse-ai.onrender.com` in production by default. If Vercel has a
+   `VITE_API_URL` environment variable configured, set it to
+   `https://docverse-ai.onrender.com` (without an `/api` suffix).
+
+To run the focused LLM configuration tests (no provider credentials or live API calls):
+```bash
+pip install -r requirements-dev.txt
+PYTHONPATH=. venv/bin/pytest tests/test_llm_factory.py
+```
+
+After configuring a valid key and starting the backend, test a real chatbot response
+from a second terminal (the first command registers a local user; the next obtains a
+JWT, then the final command sends a question to the same `/agent/query` endpoint used
+by the frontend):
+```bash
+curl -sS -X POST http://localhost:8000/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"chat-test","password":"local-test-password"}'
+
+TOKEN=$(curl -sS -X POST http://localhost:8000/login \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  --data-urlencode 'username=chat-test' \
+  --data-urlencode 'password=local-test-password' | python -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+
+curl -N -X POST http://localhost:8000/agent/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"question":"Explain how retrieval-augmented generation works.","session_id":"local-chat-test"}'
+```
+The final command exercises the configured provider and requires valid credentials; the
+mocked tests do not establish that a real provider key works.
 
 ### Frontend Configuration
 1. Navigate to the frontend directory:
@@ -123,7 +159,7 @@ graph TD
 ### Frontend Configuration (.env)
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `VITE_API_URL` | Target FastAPI backend gateway endpoint | `http://localhost:8000` |
+| `VITE_API_URL` | Optional FastAPI backend URL override (no `/api` suffix) | Local: `http://localhost:8000`; production: `https://docverse-ai.onrender.com` |
 
 ---
 

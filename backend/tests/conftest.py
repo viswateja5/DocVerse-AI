@@ -63,6 +63,8 @@ class MockLLM:
             yield MockChunk(token + " ")
 
 # Eagerly start patcher to intercept get_llm before app imports
+from services.llm_factory import get_llm as original_get_llm
+
 patcher = patch("services.llm_factory.get_llm", return_value=MockLLM())
 patcher.start()
 

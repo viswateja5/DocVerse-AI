@@ -1,7 +1,11 @@
 // Standalone Client-Side API & Search Engine Emulation Layer with FastAPI Hybrid Gateway
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:8000" : "https://enterprise-ai-document-assistant-backend.onrender.com");
+const configuredApiBase = import.meta.env.VITE_API_URL;
+const API_BASE = (
+  configuredApiBase ||
+  (import.meta.env.DEV ? "http://localhost:8000" : "https://docverse-ai.onrender.com")
+).replace(/\/+$/, '').replace(/\/api$/i, '');
 let isOfflineMode = true;
 
 axios.defaults.timeout = 15000;
@@ -54,7 +58,7 @@ const getHeaders = () => {
 const checkConnection = async () => {
   try {
     const res = await axios.get(`${API_BASE}/health`, { timeout: 4000 });
-    isOfflineMode = !(res.data && res.data.status === "healthy");
+    isOfflineMode = !(res.data && res.data.database_connected === true);
   } catch (e) {
     isOfflineMode = true;
   }
@@ -645,7 +649,9 @@ export const queryStream = async (
     });
     
     if (!response.ok) {
-      throw new Error(`Remote query failed: HTTP ${response.status}`);
+      const error = new Error(`Remote query failed: HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
     
     isOfflineMode = false;
@@ -691,6 +697,10 @@ export const queryStream = async (
     onDone();
     return;
   } catch (err) {
+    if (err.status) {
+      onError(err);
+      return;
+    }
     console.warn("Remote query connection failed, falling back to local offline mock:", err);
     isOfflineMode = true;
   }
