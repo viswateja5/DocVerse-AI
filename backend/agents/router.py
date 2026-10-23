@@ -71,7 +71,7 @@ async def route_query(state: AgentState) -> dict:
     # Heuristic pre-routing check for common real-time keywords to guarantee 105% correct routing
     has_doc_reference = any(
         re.search(rf"\b{term}\b", clean_query)
-        for term in ("pdf", "document", "uploaded", "file", "paper", "attachment")
+        for term in ("pdf", "document", "doument", "documnt", "uploaded", "file", "paper", "attachment", "doc", "docs")
     )
     
     real_time_patterns = [

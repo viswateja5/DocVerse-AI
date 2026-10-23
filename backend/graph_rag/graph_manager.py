@@ -33,8 +33,8 @@ async def build_entity_graph(documents: List[Document], session_id: str) -> nx.D
 
     llm = get_llm(streaming=False)
     
-    # Process only a subset of documents (e.g., up to 10) to avoid overloading the LLM
-    docs_to_process = documents[:10]
+    # Process only a small subset of documents (e.g., up to 2) to avoid overloading the LLM
+    docs_to_process = documents[:2]
     
     for idx, doc in enumerate(docs_to_process):
         prompt = (

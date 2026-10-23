@@ -101,7 +101,7 @@ async def process_document_background(
         # GraphRAG (optional background enrichment)
         try:
             from graph_rag.graph_manager import build_entity_graph
-            await build_entity_graph(documents, session_id or "default")
+            await build_entity_graph(documents[:2], session_id or "default")
         except Exception as ge:
             logger.warning(f"GraphRAG entity extraction failed: {ge}")
         

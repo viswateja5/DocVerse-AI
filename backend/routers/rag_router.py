@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, File, UploadFile, Form, HTTPException, R
 import sys
 import os
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 
@@ -227,7 +227,15 @@ async def get_session_documents(
     """
     result = await db.execute(
         select(UploadFileModel)
-        .where(UploadFileModel.session_id == session_id, UploadFileModel.user_id == current_user.id)
+        .where(
+            UploadFileModel.user_id == current_user.id,
+            or_(
+                UploadFileModel.session_id == session_id,
+                UploadFileModel.session_id.is_(None),
+                UploadFileModel.session_id == "",
+                UploadFileModel.session_id == "default"
+            )
+        )
         .order_by(UploadFileModel.created_at.desc())
     )
     docs = result.scalars().all()

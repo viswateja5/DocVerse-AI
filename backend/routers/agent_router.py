@@ -79,7 +79,7 @@ async def stream_agent_reasoning(
         session_history_messages = []
         prior_summary = ""
         try:
-            from sqlalchemy import select, func
+            from sqlalchemy import select, func, or_
             from models.db_models import UploadFileModel
             async with async_session_maker() as db:
                 stmt = select(func.count(UploadFileModel.id)).where(
@@ -87,7 +87,14 @@ async def stream_agent_reasoning(
                     UploadFileModel.status == "Ready",
                 )
                 if not global_search:
-                    stmt = stmt.where(UploadFileModel.session_id == session_id)
+                    stmt = stmt.where(
+                        or_(
+                            UploadFileModel.session_id == session_id,
+                            UploadFileModel.session_id.is_(None),
+                            UploadFileModel.session_id == "",
+                            UploadFileModel.session_id == "default"
+                        )
+                    )
                 res = await db.execute(stmt)
                 doc_count = res.scalar() or 0
 

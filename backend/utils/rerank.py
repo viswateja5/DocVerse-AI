@@ -6,9 +6,11 @@ def get_device() -> str:
     """
     Returns the best available device for inference.
     Defaults to CPU (or CUDA if available) to avoid MPS shader compilation failures on macOS.
+    Restricts PyTorch worker threads to 1 to stay well within 512MB RAM on free-tier containers.
     """
     try:
         import torch
+        torch.set_num_threads(1)
         if torch.cuda.is_available():
             return "cuda"
     except ImportError:

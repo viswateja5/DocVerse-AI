@@ -22,12 +22,13 @@ def load_pdf_parallel(file_path: str) -> List[Document]:
     if num_pages == 0:
         raise ValueError("PDF contains no pages.")
     
-    with ThreadPoolExecutor(max_workers=min(32, num_pages)) as executor:
-        futures = [
-            executor.submit(extract_pdf_page_content, file_path, i)
-            for i in range(num_pages)
-        ]
-        documents = [f.result() for f in futures]
+    documents = []
+    for i, page in enumerate(reader.pages):
+        try:
+            text = page.extract_text() or ""
+        except Exception:
+            text = ""
+        documents.append(Document(page_content=text, metadata={"source": file_path, "page": i}))
 
     if not documents or not any(doc.page_content.strip() for doc in documents):
         raise ValueError("Document appears to be empty or contains no extractable text.")

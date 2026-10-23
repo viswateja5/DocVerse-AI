@@ -51,7 +51,7 @@ async def retrieve_documents(state: AgentState) -> dict:
     allowed_document_ids = set()
     try:
         from database.connection import async_session_maker
-        from sqlalchemy import select
+        from sqlalchemy import select, or_
         from models.db_models import UploadFileModel
         async with async_session_maker() as db:
             authorized_documents_query = select(
@@ -63,7 +63,12 @@ async def retrieve_documents(state: AgentState) -> dict:
             )
             if not global_search:
                 authorized_documents_query = authorized_documents_query.where(
-                    UploadFileModel.session_id == session_id
+                    or_(
+                        UploadFileModel.session_id == session_id,
+                        UploadFileModel.session_id.is_(None),
+                        UploadFileModel.session_id == "",
+                        UploadFileModel.session_id == "default"
+                    )
                 )
             result = await db.execute(authorized_documents_query)
             authorized_documents = result.all()
