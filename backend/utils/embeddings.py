@@ -88,6 +88,25 @@ class CachedEmbeddings(Embeddings):
     def __call__(self, text: str) -> List[float]:
         return self.embed_query(text)
 
+class LightweightEmbeddings(Embeddings):
+    """
+    Ultra-lightweight vector embedding implementation using Scikit-Learn L2-normalized
+    HashingVectorizer. Generates 384-dimensional dense vectors for FAISS without loading
+    heavyweight deep learning frameworks (staying under 100MB RAM in production).
+    """
+    def __init__(self, n_features: int = 384):
+        from sklearn.feature_extraction.text import HashingVectorizer
+        self.vectorizer = HashingVectorizer(n_features=n_features, alternate_sign=False, norm="l2")
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        import numpy as np
+        matrix = self.vectorizer.transform(texts).toarray().astype(np.float32)
+        return matrix.tolist()
+
+    def embed_query(self, text: str) -> List[float]:
+        import numpy as np
+        return self.vectorizer.transform([text]).toarray().astype(np.float32)[0].tolist()
+
 class FakeEmbeddings(Embeddings):
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Deterministic 384-d fake embeddings
@@ -130,17 +149,19 @@ def _get_raw_embeddings_model() -> Embeddings:
         except Exception as e:
             print(f"Failed to load OpenAIEmbeddings: {e}. Trying fallback...")
 
-    # Fallback to local HuggingFace embeddings
-    try:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-    except ImportError:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
+    if os.getenv("USE_HEAVY_EMBEDDINGS") == "true":
+        try:
+            from langchain_community.embeddings import HuggingFaceEmbeddings
+            return HuggingFaceEmbeddings(
+                model_name="all-MiniLM-L6-v2",
+                model_kwargs={"device": get_device()},
+                encode_kwargs={"normalize_embeddings": True}
+            )
+        except Exception as e:
+            print(f"Failed to load HuggingFaceEmbeddings: {e}. Falling back to lightweight embeddings.")
 
-    return HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={"device": get_device()},
-        encode_kwargs={"normalize_embeddings": True}
-    )
+    # High-efficiency, low-memory local embeddings (stays under 100MB container RAM)
+    return LightweightEmbeddings(384)
 
 @lru_cache(maxsize=1)
 def get_embeddings_model() -> CachedEmbeddings:

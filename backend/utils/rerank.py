@@ -1,3 +1,5 @@
+import os
+import re
 from functools import lru_cache
 from typing import List, Any
 from langchain_core.documents import Document
@@ -42,25 +44,36 @@ def rerank_documents(
         documents[0].metadata["rerank_score"] = 1.0
         return documents[:top_n]
         
-    try:
-        model = get_cross_encoder()
-        pairs = [[query, doc.page_content] for doc in documents]
-        scores = model.predict(pairs)
+    if os.getenv("ENABLE_CROSS_ENCODER") == "true":
+        try:
+            model = get_cross_encoder()
+            pairs = [[query, doc.page_content] for doc in documents]
+            scores = model.predict(pairs)
+            
+            paired_docs = list(zip(documents, scores))
+            paired_docs.sort(key=lambda x: x[1], reverse=True)
+            
+            results = []
+            for doc, score in paired_docs[:top_n]:
+                doc.metadata["rerank_score"] = float(score)
+                results.append(doc)
+            return results
+        except Exception:
+            pass
+
+    # High-efficiency lexical overlap reranker (uses zero neural network RAM)
+    query_terms = set(re.findall(r"\w+", query.lower()))
+    scored_docs = []
+    for doc in documents:
+        doc_words = set(re.findall(r"\w+", doc.page_content.lower()))
+        overlap = len(query_terms.intersection(doc_words))
+        score = overlap / (len(query_terms) + 1e-5)
+        scored_docs.append((doc, score))
         
-        paired_docs = list(zip(documents, scores))
-        paired_docs.sort(key=lambda x: x[1], reverse=True)
-        
-        results = []
-        for doc, score in paired_docs[:top_n]:
-            doc.metadata["rerank_score"] = float(score)
-            results.append(doc)
-        return results
-    except Exception as e:
-        # Graceful fallback: return the original order with simulated scores
-        import logging
-        logger = logging.getLogger("rerank")
-        logger.warning(f"Reranking failed or disabled (using direct fallback): {e}")
-        for idx, doc in enumerate(documents):
-            doc.metadata["rerank_score"] = 1.0 - (idx * 0.05)
-        return documents[:top_n]
+    scored_docs.sort(key=lambda x: x[1], reverse=True)
+    results = []
+    for doc, score in scored_docs[:top_n]:
+        doc.metadata["rerank_score"] = float(score)
+        results.append(doc)
+    return results
 
