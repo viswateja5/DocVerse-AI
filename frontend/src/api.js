@@ -640,31 +640,67 @@ export const queryStream = async (
       "Awaiting query dispatch..."
     ]);
     
-    const response = await fetch(`${API_BASE}/agent/query`, {
-      method: 'POST',
-      headers: {
-        ...getHeaders(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        question,
-        session_id: sessionId,
-        global_search: globalSearch
-      })
-    });
-    
-    if (!response.ok) {
-      let detail = `Remote query failed: HTTP ${response.status}`;
+    let response = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      attempts++;
       try {
-        const errorJson = await response.json();
-        if (errorJson && errorJson.detail) {
-          detail = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+        response = await fetch(`${API_BASE}/agent/query`, {
+          method: 'POST',
+          headers: {
+            ...getHeaders(),
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            question,
+            session_id: sessionId,
+            global_search: globalSearch
+          })
+        });
+
+        if (response && (response.status === 502 || response.status === 503)) {
+          if (attempts < maxAttempts) {
+            onTrace([
+              "Server is waking up on Render...",
+              `Retrying connection (${attempts}/${maxAttempts})...`
+            ]);
+            await delay(2500);
+            continue;
+          }
+        }
+        break;
+      } catch (netErr) {
+        if (attempts < maxAttempts) {
+          onTrace([
+            "Re-establishing connection to server...",
+            `Retrying (${attempts}/${maxAttempts})...`
+          ]);
+          await delay(2000);
+          continue;
+        }
+        throw netErr;
+      }
+    }
+    
+    if (!response || !response.ok) {
+      const status = response ? response.status : 503;
+      let detail = status === 503
+        ? "The server was temporarily waking up on Render. Please try again now."
+        : `Remote query failed: HTTP ${status}`;
+      try {
+        if (response) {
+          const errorJson = await response.json();
+          if (errorJson && errorJson.detail) {
+            detail = typeof errorJson.detail === 'string' ? errorJson.detail : JSON.stringify(errorJson.detail);
+          }
         }
       } catch (e) {
         // response was not JSON
       }
       const error = new Error(detail);
-      error.status = response.status;
+      error.status = status;
       throw error;
     }
     
