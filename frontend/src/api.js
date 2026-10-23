@@ -2,9 +2,14 @@
 import axios from 'axios';
 
 const configuredApiBase = import.meta.env.VITE_API_URL;
+const defaultApiBase = import.meta.env.DEV
+  ? "http://localhost:8000"
+  : "https://docverse-ai.onrender.com";
 const API_BASE = (
-  configuredApiBase ||
-  (import.meta.env.DEV ? "http://localhost:8000" : "https://docverse-ai.onrender.com")
+  configuredApiBase?.replace(
+    /^https?:\/\/enterprise-ai-document-assistant-backend\.onrender\.com(?=\/|$)/i,
+    "https://docverse-ai.onrender.com"
+  ) || defaultApiBase
 ).replace(/\/+$/, '').replace(/\/api$/i, '');
 let isOfflineMode = true;
 
