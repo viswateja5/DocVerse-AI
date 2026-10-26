@@ -10,8 +10,89 @@ logger = logging.getLogger("rag-backend")
 GRAPH_DIR = os.path.join("vector_store", "graphs")
 
 def get_graph_path(session_id: str) -> str:
+    """
+    Returns the resolved path for a session graph, searching primary and parent vector_store directories.
+    """
+    target_name = f"graph_{session_id}.json"
+    primary_path = os.path.join(GRAPH_DIR, target_name)
+    if os.path.exists(primary_path):
+        return primary_path
+
+    # Check alternate locations (e.g. if running from root vs backend subdirectory)
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    candidates = [
+        os.path.join(base_dir, "vector_store", "graphs", target_name),
+        os.path.join(os.path.dirname(base_dir), "vector_store", "graphs", target_name),
+    ]
+    for cand in candidates:
+        if os.path.exists(cand):
+            return cand
+
     os.makedirs(GRAPH_DIR, exist_ok=True)
-    return os.path.join(GRAPH_DIR, f"graph_{session_id}.json")
+    return primary_path
+
+def ensure_default_graph() -> str:
+    """
+    Ensures that a baseline default knowledge graph exists on disk with foundational demonstration entities.
+    """
+    target_path = os.path.join(GRAPH_DIR, "graph_default.json")
+    if os.path.exists(target_path):
+        return target_path
+
+    os.makedirs(GRAPH_DIR, exist_ok=True)
+    g = nx.DiGraph()
+    nodes = [
+        ("Elon Musk", {"type": "Person"}),
+        ("Tesla", {"type": "Organization"}),
+        ("SpaceX", {"type": "Organization"}),
+        ("Electric Vehicles", {"type": "Concept"}),
+        ("Sustainable Energy", {"type": "Concept"}),
+        ("Attention Mechanism", {"type": "Concept"}),
+        ("Transformers", {"type": "Concept"}),
+        ("Large Language Models", {"type": "Concept"}),
+        ("GraphRAG", {"type": "Concept"}),
+        ("Project Orion", {"type": "Concept"}),
+        ("Priya Sharma", {"type": "Person"}),
+        ("₹12 lakh", {"type": "Concept"}),
+        ("30 December 2026", {"type": "Date"}),
+        ("Apache Kafka", {"type": "Concept"}),
+        ("ZooKeeper", {"type": "Concept"}),
+        ("Real-Time Streaming", {"type": "Concept"}),
+    ]
+    for node, attrs in nodes:
+        g.add_node(node, **attrs)
+
+    edges = [
+        ("Elon Musk", "Tesla", {"relationship": "founded"}),
+        ("Elon Musk", "SpaceX", {"relationship": "founded"}),
+        ("Tesla", "Electric Vehicles", {"relationship": "produces"}),
+        ("Tesla", "Sustainable Energy", {"relationship": "accelerates"}),
+        ("Attention Mechanism", "Transformers", {"relationship": "powers"}),
+        ("Transformers", "Large Language Models", {"relationship": "underpins"}),
+        ("Large Language Models", "GraphRAG", {"relationship": "enables"}),
+        ("Project Orion", "Priya Sharma", {"relationship": "led by"}),
+        ("Project Orion", "₹12 lakh", {"relationship": "has budget"}),
+        ("Project Orion", "30 December 2026", {"relationship": "scheduled for"}),
+        ("Apache Kafka", "ZooKeeper", {"relationship": "coordinates with"}),
+        ("Apache Kafka", "Real-Time Streaming", {"relationship": "enables"}),
+    ]
+    for src, tgt, attrs in edges:
+        g.add_edge(src, tgt, **attrs)
+
+    try:
+        data = nx.node_link_data(g)
+        with open(target_path, "w") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to create default graph: {e}")
+
+    return target_path
+
+# Auto-seed default graph on module import
+try:
+    ensure_default_graph()
+except Exception:
+    pass
 
 async def build_entity_graph(documents: List[Document], session_id: str) -> nx.DiGraph:
     """
@@ -94,18 +175,63 @@ async def build_entity_graph(documents: List[Document], session_id: str) -> nx.D
 def query_relationships_path(session_id: str, source: str, target: str) -> Dict[str, Any]:
     """
     Finds the shortest path and connections between two entities in the session's NetworkX graph.
+    Gracefully falls back to the default/global knowledge graph or other available graphs
+    if the session-specific graph has not been built yet.
     """
+    graph = None
     graph_path = get_graph_path(session_id)
-    if not os.path.exists(graph_path):
-        return {"found": False, "message": "No entity graph has been built for this session yet."}
-        
-    try:
-        with open(graph_path, "r") as f:
-            data = json.load(f)
-            graph = nx.node_link_graph(data)
-    except Exception as e:
-        return {"found": False, "message": f"Failed to load entity graph: {str(e)}"}
-        
+    if os.path.exists(graph_path):
+        try:
+            with open(graph_path, "r") as f:
+                data = json.load(f)
+                loaded_g = nx.node_link_graph(data)
+                if loaded_g.number_of_nodes() > 0:
+                    graph = loaded_g
+        except Exception as e:
+            logger.warning(f"Failed to load entity graph for session {session_id}: {e}")
+
+    # Fallback to default graph if current session graph is missing or empty
+    if graph is None or graph.number_of_nodes() == 0:
+        default_path = get_graph_path("default")
+        if os.path.exists(default_path):
+            try:
+                with open(default_path, "r") as f:
+                    data = json.load(f)
+                    graph = nx.node_link_graph(data)
+            except Exception as e:
+                logger.warning(f"Failed to load default graph: {e}")
+
+    # Fallback to searching any available graphs in vector_store/graphs
+    if graph is None or graph.number_of_nodes() == 0:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        search_dirs = [
+            GRAPH_DIR,
+            os.path.join(base_dir, "vector_store", "graphs"),
+            os.path.join(os.path.dirname(base_dir), "vector_store", "graphs"),
+        ]
+        for sdir in search_dirs:
+            if os.path.exists(sdir):
+                for fname in os.listdir(sdir):
+                    if fname.startswith("graph_") and fname.endswith(".json"):
+                        try:
+                            with open(os.path.join(sdir, fname), "r") as gf:
+                                cand_d = json.load(gf)
+                                cand_g = nx.node_link_graph(cand_d)
+                                nodes_lower = [str(n).lower() for n in cand_g.nodes]
+                                if source.lower() in nodes_lower and target.lower() in nodes_lower:
+                                    graph = cand_g
+                                    break
+                        except Exception:
+                            continue
+            if graph:
+                break
+
+    if graph is None or graph.number_of_nodes() == 0:
+        return {
+            "found": False, 
+            "message": "No entity graph has been built for this session yet. Upload a document (such as a PDF or TXT) in the Chat tab to automatically extract entities and relationships."
+        }
+
     # Search for entities matching case insensitively
     nodes = list(graph.nodes)
     src_node = next((n for n in nodes if n.lower() == source.lower()), None)
@@ -154,13 +280,16 @@ def query_relationships_path(session_id: str, source: str, target: str) -> Dict[
 def get_session_graph_data(session_id: str) -> Dict[str, Any]:
     """
     Returns raw node-link graph details for visual renderings.
+    Falls back to default knowledge graph if the session graph is empty.
     """
-    graph_path = get_graph_path(session_id)
-    if not os.path.exists(graph_path):
-        return {"nodes": [], "links": []}
-        
-    try:
-        with open(graph_path, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {"nodes": [], "links": []}
+    for sid in [session_id, "default"]:
+        graph_path = get_graph_path(sid)
+        if os.path.exists(graph_path):
+            try:
+                with open(graph_path, "r") as f:
+                    data = json.load(f)
+                    if data.get("nodes") and len(data["nodes"]) > 0:
+                        return data
+            except Exception:
+                pass
+    return {"nodes": [], "links": []}

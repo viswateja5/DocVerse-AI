@@ -179,6 +179,25 @@ async def ingest_document(
         )
         db.add(db_file)
         await db.commit()
+
+        # Duplicate document graph handling: copy or build graph for the new session
+        if session_id and duplicate.session_id != session_id:
+            try:
+                from graph_rag.graph_manager import get_graph_path, build_entity_graph
+                src_graph = get_graph_path(duplicate.session_id or "default")
+                dst_graph = get_graph_path(session_id)
+                if os.path.exists(src_graph) and not os.path.exists(dst_graph):
+                    import shutil
+                    shutil.copyfile(src_graph, dst_graph)
+                elif dup_chunks and not os.path.exists(dst_graph):
+                    if background_tasks:
+                        background_tasks.add_task(build_entity_graph, dup_chunks[:2], session_id)
+                    else:
+                        import asyncio
+                        asyncio.create_task(build_entity_graph(dup_chunks[:2], session_id))
+            except Exception as ge:
+                logger.warning(f"Failed to clone entity graph for duplicate doc: {ge}")
+
         return duplicate.chunk_count, doc_id, "Ready"
 
     # Save the file stream

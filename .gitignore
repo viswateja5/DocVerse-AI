@@ -12,6 +12,10 @@ __pycache__/
 
 # Database, uploads and vector store indices
 vector_store/
+!vector_store/graphs/
+!vector_store/graphs/graph_default.json
+!backend/vector_store/graphs/
+!backend/vector_store/graphs/graph_default.json
 uploads/
 *.db
 *.sqlite

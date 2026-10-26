@@ -69,7 +69,14 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(startup_tasks())
     
-    # 3. ML Models are lazy loaded on demand to minimize startup RAM below 100 MB.
+    # 3. Seed baseline demonstration knowledge graph
+    try:
+        from graph_rag.graph_manager import ensure_default_graph
+        ensure_default_graph()
+    except Exception as e:
+        logger.warning(f"Could not seed default knowledge graph on startup: {e}")
+
+    # 4. ML Models are lazy loaded on demand to minimize startup RAM below 100 MB.
     logger.info("ML Models deferred (lazy loaded on active search/study queries).")
     
     yield
