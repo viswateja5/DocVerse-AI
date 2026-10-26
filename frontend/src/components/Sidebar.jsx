@@ -12,8 +12,6 @@ import {
   BarChart3,
   X,
   GraduationCap,
-  Network,
-  Eye,
   Settings,
   BookOpen,
   LogOut
@@ -354,32 +352,6 @@ export default function Sidebar({
               {!isCollapsed && <span className="animate-fade-in">Study Center</span>}
             </button>
 
-            <button
-              onClick={() => onChangeTab('graph')}
-              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
-                activeTab === 'graph' 
-                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
-                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
-              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
-              title={isCollapsed ? "GraphRAG Connections" : undefined}
-            >
-              <Network className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span className="animate-fade-in">GraphRAG Connections</span>}
-            </button>
-
-            <button
-              onClick={() => onChangeTab('preview')}
-              className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${
-                activeTab === 'preview' 
-                  ? 'bg-indigo-50/60 border-indigo-150/40 text-[#6366F1] shadow-sm' 
-                  : 'bg-transparent border-transparent hover:bg-slate-50 text-[#64748B] hover:text-[#1E293B]'
-              } ${isCollapsed ? 'justify-center px-0' : 'px-3 space-x-2.5'}`}
-              title={isCollapsed ? "Context Preview" : undefined}
-            >
-              <Eye className="w-4 h-4 shrink-0" />
-              {!isCollapsed && <span className="animate-fade-in">Context Preview</span>}
-            </button>
-            
             <button
               onClick={() => onChangeTab('academic')}
               className={`w-full py-2 rounded-xl text-xs font-bold flex items-center border transition-all duration-200 ${

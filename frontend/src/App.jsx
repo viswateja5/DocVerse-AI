@@ -4,8 +4,6 @@ import {
   X, 
   Database,
   GraduationCap,
-  Network,
-  Eye,
   BookOpen,
   ArrowRight,
   HelpCircle,
@@ -33,8 +31,6 @@ import {
   queryStream,
   exportSession,
   fetchEduContent,
-  fetchGraphPath,
-  fetchGraphData,
   fetchSessionDocuments,
   deleteDocument
 } from './api';
@@ -70,7 +66,7 @@ function MainApp() {
   const [sessionDocuments, setSessionDocuments] = useState([]);
   const [globalSearch, setGlobalSearch] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'study' | 'graph' | 'preview'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'study' | 'academic'
   const [tokensLeft, setTokensLeft] = useState(() => {
     const saved = localStorage.getItem('rag_tokens_left');
     return saved ? parseInt(saved, 10) : 100000;
@@ -92,13 +88,6 @@ function MainApp() {
   const [flippedCards, setFlippedCards] = useState({}); // { cardIdx: boolean }
   const [showAllStudyItems, setShowAllStudyItems] = useState(false);
   const studyOutputRef = useRef(null);
-
-  // GraphRAG state
-  const [graphSource, setGraphSource] = useState('');
-  const [graphTarget, setGraphTarget] = useState('');
-  const [graphPathData, setGraphPathData] = useState(null);
-  const [graphLoading, setGraphLoading] = useState(false);
-  const [graphError, setGraphError] = useState('');
 
   const handleUploadSuccess = async () => {
     if (!sessionId) return;
@@ -220,7 +209,6 @@ function MainApp() {
   const handleSelectSession = async (id) => {
     setSessionId(id);
     setStudyData(null);
-    setGraphPathData(null);
     
     try {
       const data = await fetchSessionHistory(id);
@@ -493,32 +481,6 @@ function MainApp() {
   useEffect(() => {
     setShowAllStudyItems(false);
   }, [studyType, studyData]);
-
-  const handleFindGraphPath = async (e) => {
-    e.preventDefault();
-    if (!graphSource.trim() || !graphTarget.trim()) return;
-
-    setGraphLoading(true);
-    setGraphPathData(null);
-    setGraphError('');
-
-    try {
-      const data = await fetchGraphPath(sessionId, graphSource.trim(), graphTarget.trim());
-      if (data.found) {
-        setGraphPathData(data);
-        addToast("Shortest relationship path traced!", "success");
-      } else {
-        setGraphError(data.message || "No relationship path found.");
-        addToast("No relationships mapped between concepts.", "info");
-      }
-    } catch (err) {
-      console.error(err);
-      setGraphError("Failed to trace graph relationships.");
-      addToast("Graph connections search error", "error");
-    } finally {
-      setGraphLoading(false);
-    }
-  };
 
   const handleLogout = () => {
     localStorage.removeItem('rag_token');
@@ -895,126 +857,6 @@ function MainApp() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {path === '/dashboard' && activeTab === 'graph' && (
-        <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-[#0E0F13] overflow-y-auto overflow-x-hidden min-h-screen scrollbar-thin p-6 md:p-10 select-none transition-colors duration-300">
-          <div className="max-w-4xl mx-auto w-full animate-fade-in">
-            <div className="mb-6 flex items-center space-x-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-indigo-400">
-              <Network className="w-8 h-8 text-emerald-450 shrink-0" />
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-850 dark:text-white">GraphRAG Relationship Explorer</h1>
-            </div>
-            <p className="text-sm text-slate-500 dark:text-gray-400 mb-8 max-w-2xl">
-              Examine connections and shortest relationship paths between entities extracted automatically during document parsing.
-            </p>
-
-            <form onSubmit={handleFindGraphPath} className="bg-slate-100/70 dark:bg-[#13141C]/80 border border-slate-200 dark:border-white/5 rounded-2xl p-6 mb-8 grid grid-cols-1 sm:grid-cols-3 gap-5 backdrop-blur-md shadow-xl select-none">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest mb-2">Source Entity</label>
-                <input
-                  type="text"
-                  value={graphSource}
-                  onChange={e => setGraphSource(e.target.value)}
-                  placeholder="e.g. Elon Musk"
-                  className="w-full py-2.5 px-3 bg-white dark:bg-[#181922] border border-slate-200 dark:border-white/5 rounded-xl text-xs text-slate-800 dark:text-gray-250 placeholder-slate-400 outline-none focus:border-emerald-500 transition-all duration-300"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-400 dark:text-gray-550 uppercase tracking-widest mb-2">Target Entity</label>
-                <input
-                  type="text"
-                  value={graphTarget}
-                  onChange={e => setGraphTarget(e.target.value)}
-                  placeholder="e.g. Tesla"
-                  className="w-full py-2.5 px-3 bg-white dark:bg-[#181922] border border-slate-200 dark:border-white/5 rounded-xl text-xs text-slate-800 dark:text-gray-250 placeholder-slate-400 outline-none focus:border-emerald-500 transition-all duration-300"
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="submit"
-                  disabled={graphLoading}
-                  className="w-full py-2.5 font-bold"
-                  icon={graphLoading ? <RefreshCw className="w-4 h-4 animate-spin text-white" /> : <Search className="w-4 h-4 text-white" />}
-                >
-                  <span>Search Connections</span>
-                </Button>
-              </div>
-            </form>
-
-            {graphError && (
-              <div className="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-500/20 p-4 rounded-xl text-xs text-rose-600 dark:text-rose-400 font-bold text-center animate-fade-in shadow-sm select-text">
-                ⚠️ {graphError}
-              </div>
-            )}
-
-            {graphPathData && (
-              <div className="bg-white/80 dark:bg-[#13141c]/60 border border-slate-200 dark:border-white/5 rounded-2xl p-6 shadow-2xl animate-fade-in select-text">
-                <h2 className="text-xl font-bold text-slate-850 dark:text-white mb-4 flex items-center space-x-2 border-b border-slate-200 dark:border-white/5 pb-3">
-                  <span className="text-indigo-400">🔗</span>
-                  <span>Shortest Relationship Path Results</span>
-                </h2>
-                <div className="flex flex-col space-y-4">
-                  {graphPathData.details.map((link, idx) => (
-                    <div key={idx} className="flex flex-col sm:flex-row items-center justify-between bg-slate-50 dark:bg-[#16171f]/80 p-4 rounded-xl border border-slate-200 dark:border-white/5 text-xs shadow-sm hover:scale-[1.01] hover:border-emerald-500/20 transition-all duration-300">
-                      <div className="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded-xl flex flex-col items-center sm:items-start max-w-[200px] truncate shadow-inner">
-                        <strong className="text-slate-800 dark:text-white truncate max-w-xs">{link.source}</strong>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-emerald-500/60 mt-0.5">{link.source_type}</span>
-                      </div>
-                      <div className="my-2 sm:my-0 text-[#6366F1] font-bold font-mono text-[10px] uppercase tracking-widest flex flex-col items-center shrink-0">
-                        <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-500/20 rounded-full">{link.relationship}</span>
-                        <span className="text-[14px] mt-1 tracking-widest leading-none">───▶</span>
-                      </div>
-                      <div className="px-3.5 py-2 bg-slate-100 dark:bg-indigo-950/20 border border-slate-250 dark:border-white/5 text-slate-800 dark:text-gray-200 rounded-xl flex flex-col items-center sm:items-start max-w-[200px] truncate">
-                        <strong className="text-slate-850 dark:text-white truncate max-w-xs">{link.target}</strong>
-                        <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400 dark:text-gray-500 mt-0.5">{link.target_type}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {path === '/dashboard' && activeTab === 'preview' && (
-        <div className="flex-1 flex flex-col bg-[#F8FAFC] dark:bg-[#0E0F13] overflow-y-auto overflow-x-hidden min-h-screen scrollbar-thin p-6 md:p-10 select-none transition-colors duration-300">
-          <div className="max-w-4xl mx-auto w-full animate-fade-in">
-            <div className="mb-6 flex items-center space-x-3 text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-indigo-400">
-              <Eye className="w-8 h-8 text-emerald-450 shrink-0" />
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-850 dark:text-white">Visual Context Document Preview</h1>
-            </div>
-            <p className="text-sm text-slate-500 dark:text-gray-400 mb-8 max-w-2xl">
-              Examine structured indexing metadata and view loaded chunk structures directly in vector DB layout space.
-            </p>
-            
-            {activeDocument ? (
-              <div className="bg-white/80 dark:bg-[#13141c]/60 border border-slate-200 dark:border-white/5 rounded-2xl p-6 shadow-2xl animate-fade-in select-text">
-                <h2 className="text-lg font-bold text-slate-850 dark:text-white mb-4 border-b border-slate-200 dark:border-white/5 pb-3 select-none">Document Details</h2>
-                <div className="bg-slate-55/50 dark:bg-[#16171f]/80 p-5 rounded-xl border border-slate-200 dark:border-white/5 space-y-4 text-xs md:text-sm">
-                  <p className="text-slate-700 dark:text-gray-300 flex items-center justify-between">
-                    <span className="font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest text-[10px] select-none">File Context:</span> 
-                    <span className="font-bold text-indigo-600 dark:text-indigo-455 bg-indigo-50 dark:bg-emerald-950/40 border border-indigo-250 dark:border-emerald-500/20 px-3 py-1 rounded-xl shadow-inner">{activeDocument.name}</span>
-                  </p>
-                  <p className="text-slate-700 dark:text-gray-300 flex items-center justify-between">
-                    <span className="font-bold text-slate-400 dark:text-gray-500 uppercase tracking-widest text-[10px] select-none">Indexed Blocks:</span> 
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">{activeDocument.chunks} chunks loaded in FAISS</span>
-                  </p>
-                  <div className="h-64 bg-slate-100 dark:bg-black/40 rounded-xl border border-slate-200 dark:border-white/5 flex flex-col items-center justify-center text-slate-400 dark:text-gray-550 italic text-center p-6 shadow-inner select-none">
-                    <Database className="w-10 h-10 text-emerald-500/20 mb-3" />
-                    <span className="font-semibold text-xs text-slate-500 dark:text-gray-400">Thumbnail view active</span>
-                    <p className="text-[10px] text-slate-450 dark:text-gray-600 mt-1.5 max-w-xs">Document chunks are parsed and loaded dynamically. Interactive canvas layers will load once context-focused queries are fired.</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-slate-100/50 dark:bg-[#13141c]/40 border border-slate-200 dark:border-white/5 rounded-2xl p-12 text-center text-slate-400 dark:text-gray-500 italic text-xs md:text-sm select-none shadow-md">
-                <Database className="w-8 h-8 text-slate-400 dark:text-gray-700 mx-auto mb-3" />
-                <span>Please select or ingest a file context block to preview chunks visually.</span>
               </div>
             )}
           </div>
